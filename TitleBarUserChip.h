@@ -18,7 +18,8 @@ class TitleBarUserChip final : public QWidget
     Q_OBJECT
 
 public:
-    static constexpr int kAvatarSide = 24;
+    static constexpr int kAvatarButtonSide = 20;
+    static constexpr int kAvatarIconSide = 18;
 
     explicit TitleBarUserChip(QWidget* parent, const QUrl& apiBaseUrl);
     void SyncFromSession(const qianjizn::user::UserSession* session);
@@ -50,3 +51,5 @@ private:
     QString _fallbackNickName;
     QString _fallbackUserName;
 };
+
+

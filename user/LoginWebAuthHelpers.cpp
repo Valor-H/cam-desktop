@@ -1,11 +1,5 @@
 #include "LoginWebAuthHelpers.h"
 
-#include "DesktopWeb.h"
-
-#include <QUrlQuery>
-
-QJ_USING_NAMESPACE_FIT_USER
-
 namespace LoginWebAuth
 {
 QString ExtractAuthRoutePath(const QUrl& url)
@@ -81,8 +75,7 @@ bool IsTrustedInvokeSource(const QUrl& currentUrl, const QUrl& loginPageUrl)
     if (!IsTrustedUiSource(currentUrl, loginPageUrl)) {
         return false;
     }
-
-    const QUrlQuery query(currentUrl);
-    return query.queryItemValue(desktopClientQueryKey()) == desktopClientQueryValue();
+    const AuthRoute route = RouteFromPath(ExtractAuthRoutePath(currentUrl));
+    return route == AuthRoute::Login || route == AuthRoute::Register || route == AuthRoute::Reset;
 }
 }

@@ -29,9 +29,9 @@ QString AvatarRibbonToolButtonStyleSheet()
         "SARibbonToolButton#CamTitleBarUserAvatar:hover,"
         "SARibbonToolButton#CamTitleBarUserAvatar:pressed {"
         "  background-color: transparent;"
-        "  border: 1px solid transparent;"
-        "  border-radius: 4px;"
-        "}");
+        "  border: none;"
+        "  border-radius: 999px;"
+        "  padding: 0;""}");
 }
 }
 
@@ -41,7 +41,7 @@ TitleBarUserChip::TitleBarUserChip(QWidget* parent, const QUrl& apiBaseUrl)
     , _nam(new QNetworkAccessManager(this))
 {
     setCursor(Qt::PointingHandCursor);
-    setMinimumHeight(TitleBarUserChip::kAvatarSide);
+    setMinimumHeight(TitleBarUserChip::kAvatarButtonSide);
     setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
     setAttribute(Qt::WA_TranslucentBackground, true);
     setStyleSheet(QStringLiteral("TitleBarUserChip { background: transparent; }"));
@@ -51,7 +51,9 @@ TitleBarUserChip::TitleBarUserChip(QWidget* parent, const QUrl& apiBaseUrl)
     _avatarButton->setAttribute(Qt::WA_StyledBackground, true);
     _avatarButton->setStyleSheet(AvatarRibbonToolButtonStyleSheet());
     _avatarButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    _avatarButton->setSmallIconSize(QSize(TitleBarUserChip::kAvatarSide, TitleBarUserChip::kAvatarSide));
+    _avatarButton->setSmallIconSize(QSize(TitleBarUserChip::kAvatarIconSide, TitleBarUserChip::kAvatarIconSide));
+    _avatarButton->setIconSize(QSize(TitleBarUserChip::kAvatarIconSide, TitleBarUserChip::kAvatarIconSide));
+    _avatarButton->setFixedSize(QSize(TitleBarUserChip::kAvatarButtonSide, TitleBarUserChip::kAvatarButtonSide));
     _avatarButton->setFocusPolicy(Qt::NoFocus);
     _avatarButton->setCursor(Qt::PointingHandCursor);
     connect(_avatarButton, &QToolButton::clicked, this, [this]() {
@@ -63,7 +65,7 @@ TitleBarUserChip::TitleBarUserChip(QWidget* parent, const QUrl& apiBaseUrl)
     });
 
     auto* lay = new QHBoxLayout(this);
-    lay->setContentsMargins(0, 0, 6, 0);
+    lay->setContentsMargins(0, 0, 4, 0);
     lay->setSpacing(0);
     lay->setAlignment(Qt::AlignVCenter);
     lay->addWidget(_avatarButton);
@@ -100,7 +102,7 @@ void TitleBarUserChip::ApplyDefaultAvatar()
 {
     _fallbackNickName.clear();
     _fallbackUserName.clear();
-    const QPixmap ph = LoadAvatarRaster(kNeutralAvatarRes, TitleBarUserChip::kAvatarSide * 2);
+    const QPixmap ph = LoadAvatarRaster(kNeutralAvatarRes, TitleBarUserChip::kAvatarIconSide * 2);
     _avatarButton->setIcon(QIcon(MakeCircularAvatar(ph)));
     _avatarButton->setToolTip(tr("Not logged in"));
 }
@@ -118,7 +120,7 @@ void TitleBarUserChip::ApplyLoggedInAppearance(const UserSession* session)
     }
 
     const QPixmap loggedInPlaceholder = MakeCircularAvatar(
-        LoadAvatarRaster(kNeutralAvatarRes, TitleBarUserChip::kAvatarSide * 2));
+        LoadAvatarRaster(kNeutralAvatarRes, TitleBarUserChip::kAvatarIconSide * 2));
 
     const QString raw = u.value(QStringLiteral("avatar")).toString().trimmed();
     if (raw.isEmpty()) {
@@ -172,7 +174,7 @@ QString TitleBarUserChip::PickInitialChar(const QString& nickName, const QString
 
 QPixmap TitleBarUserChip::MakeInitialAvatarWithRing(const QString& nickName, const QString& userName) const
 {
-    const int side = TitleBarUserChip::kAvatarSide;
+    const int side = TitleBarUserChip::kAvatarIconSide;
     QPixmap out(side, side);
     out.fill(Qt::transparent);
 
@@ -204,7 +206,7 @@ QPixmap TitleBarUserChip::LoadAvatarRaster(const char* resourcePath, int side)
 
 QPixmap TitleBarUserChip::MakeCircularAvatar(const QPixmap& source) const
 {
-    const int side = TitleBarUserChip::kAvatarSide;
+    const int side = TitleBarUserChip::kAvatarIconSide;
     QPixmap out(side, side);
     out.fill(Qt::transparent);
     if (source.isNull()) {
@@ -258,3 +260,6 @@ void TitleBarUserChip::OnAvatarDownloadFinished(QNetworkReply* reply)
     RelayoutInParent();
     QTimer::singleShot(0, this, [this]() { RelayoutInParent(); });
 }
+
+
+

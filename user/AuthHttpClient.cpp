@@ -34,6 +34,7 @@ void AuthHttpClient::Post(
     req->timeout = timeoutSec;
     req->headers["Authorization"] = "Bearer " + bearerToken.toStdString();
     req->headers["Content-Type"]  = "application/json";
+    req->headers["X-Client-Type"] = "desktop";
     req->body = "{}";
 
     requests::async(req,
@@ -91,6 +92,7 @@ void AuthHttpClient::PostJsonToFile(
     req->timeout = timeoutSec;
     req->headers["Authorization"] = "Bearer " + bearerToken.toStdString();
     req->headers["Content-Type"] = "application/json";
+    req->headers["X-Client-Type"] = "desktop";
     req->body = jsonBody.toStdString();
 
     requests::async(req,

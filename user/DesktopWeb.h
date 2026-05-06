@@ -7,16 +7,6 @@
 #include <QUrlQuery>
 
 QJ_NAMESPACE_FIT_USER_BEGIN
-inline QString desktopClientQueryKey()
-{
-    return QStringLiteral("client");
-}
-
-inline QString desktopClientQueryValue()
-{
-    return QStringLiteral("desktop");
-}
-
 inline QUrl buildDesktopLoginUrl(const QUrl& frontendBase)
 {
     QUrl url = frontendBase;
@@ -24,42 +14,55 @@ inline QUrl buildDesktopLoginUrl(const QUrl& frontendBase)
         url.setPath(url.path() + QLatin1Char('/'));
     }
     QUrlQuery query(url);
-    query.addQueryItem(desktopClientQueryKey(), desktopClientQueryValue());
+    query.removeAllQueryItems(QStringLiteral("source"));
+    query.addQueryItem(QStringLiteral("source"), QStringLiteral("desktop"));
     url.setQuery(query);
     return url;
 }
 
-inline QUrl buildPersonalProfileUrl(const QUrl& frontendBase, const QString& authToken)
+inline QUrl buildPersonalProfileUrl(const QUrl& frontendBase)
 {
-    QUrl url = frontendBase.resolved(QUrl(QStringLiteral("profile-personal")));
-    if (!authToken.isEmpty()) {
-        QUrlQuery q;
-        q.addQueryItem(QStringLiteral("token"), authToken);
-        url.setQuery(q);
+    return frontendBase.resolved(QUrl(QStringLiteral("profile-personal")));
+}
+
+inline QUrl buildTeamUrl(const QUrl& frontendBase)
+{
+    return frontendBase.resolved(QUrl(QStringLiteral("team")));
+}
+
+inline QUrl buildExternalSsoLoginUrl(const QUrl& frontendBase, const QString& ticket, const QString& redirectPath)
+{
+    QUrl url = frontendBase.resolved(QUrl(QStringLiteral("sso-login")));
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("ticket"), ticket.trimmed());
+    QString normalizedRedirect = redirectPath.trimmed();
+    if (normalizedRedirect.isEmpty()) {
+        normalizedRedirect = QStringLiteral("/profile-personal");
+    } else if (!normalizedRedirect.startsWith(QLatin1Char('/'))) {
+        normalizedRedirect.prepend(QLatin1Char('/'));
     }
+    query.addQueryItem(QStringLiteral("redirect"), normalizedRedirect);
+    url.setQuery(query);
     return url;
 }
 
-inline QUrl buildTeamUrl(const QUrl& frontendBase, const QString& authToken)
-{
-    QUrl url = frontendBase.resolved(QUrl(QStringLiteral("team")));
-    if (!authToken.isEmpty()) {
-        QUrlQuery q;
-        q.addQueryItem(QStringLiteral("token"), authToken);
-        url.setQuery(q);
-    }
-    return url;
-}
-
-inline QUrl buildFileManagerUrl(const QUrl& frontendBase, const QString& authToken)
+inline QUrl buildFileManagerUrl(const QUrl& frontendBase, const QString& /*authToken*/)
 {
     QUrl url = frontendBase.resolved(QUrl(QStringLiteral("local-files")));
-    QUrlQuery q;
-    q.addQueryItem(desktopClientQueryKey(), desktopClientQueryValue());
-    if (!authToken.isEmpty()) {
-        q.addQueryItem(QStringLiteral("token"), authToken);
-    }
-    url.setQuery(q);
+    QUrlQuery query(url);
+    query.removeAllQueryItems(QStringLiteral("source"));
+    query.addQueryItem(QStringLiteral("source"), QStringLiteral("desktop"));
+    url.setQuery(query);
+    return url;
+}
+
+inline QUrl buildRecentFilesUrl(const QUrl& frontendBase)
+{
+    QUrl url = frontendBase.resolved(QUrl(QStringLiteral("recent-files")));
+    QUrlQuery query(url);
+    query.removeAllQueryItems(QStringLiteral("source"));
+    query.addQueryItem(QStringLiteral("source"), QStringLiteral("desktop"));
+    url.setQuery(query);
     return url;
 }
 QJ_NAMESPACE_FIT_USER_END

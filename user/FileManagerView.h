@@ -6,30 +6,33 @@
 #include "UserAuthService.h"
 
 #include <QByteArray>
-#include <QDialog>
 #include <QFutureWatcher>
 #include <QUrl>
 #include <QVariant>
+#include <QWidget>
 
 class QString;
 
 class QCefView;
-class QWidget;
 class AuthHttpClient;
 
-class USER_EXPORT FileManagerDialog : public QDialog
+class USER_EXPORT FileManagerView : public QWidget
 {
     Q_OBJECT
 
 public:
-    explicit FileManagerDialog(QWidget* parent, qianjizn::user::UserAuthService* authService, const QUrl& pageUrl);
-    ~FileManagerDialog() override;
+    explicit FileManagerView(QWidget* parent, qianjizn::user::UserAuthService* authService, const QUrl& pageUrl);
+    ~FileManagerView() override;
+    void NavigateTo(const QUrl& pageUrl);
 
 signals:
     void OpenFileRequested(const QString& filePath);
 
 private:
+    void ApplyEmbeddedScale();
     void InjectDesktopBridgeScript();
+    void SyncAuthStateToWeb();
+    void PushCurrentAuthStateToWeb();
     void OnLoadEnd();
     void OnInvokeMethod(const QString& method, const QVariantList& arguments);
     void RequestLocalFilesSnapshot();

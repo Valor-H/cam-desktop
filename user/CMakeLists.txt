@@ -1,29 +1,17 @@
 # user 模块动态库：登录 UI（QCef）、HTTP（libhv）、会话与 token 持久化
 # 注意：QCefView 在根 CMakeLists.txt 中定义
 
+file(GLOB USER_HEADERS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.h"
+)
+
+file(GLOB USER_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+)
+
 add_library(user SHARED
-    user_global.h
-    MockCamOptions.cpp
-    MockCamOptions.h
-    UserSession.cpp
-    UserSession.h
-    AuthHttpClient.cpp
-    AuthHttpClient.h
-    LoginWebAuthHelpers.cpp
-    LoginWebAuthHelpers.h
-    DesktopAuthBridge.h
-    LocalFilesBridge.h
-    LocalFilesSnapshot.cpp
-    LocalFilesSnapshot.h
-    AccountAuthDialog.cpp
-    AccountAuthDialog.h
-    FileManagerDialog.cpp
-    FileManagerDialog.h
-    UserAuthService.cpp
-    UserAuthService.h
-    UserModuleConfig.h
-    DesktopWeb.h
-    user.h
+    ${USER_HEADERS}
+    ${USER_SOURCES}
 )
 
 target_include_directories(user PUBLIC

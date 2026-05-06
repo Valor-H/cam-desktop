@@ -5,7 +5,6 @@
 #include "DesktopWeb.h"
 
 #include <QSettings>
-#include <QMessageBox>
 #include <QWidget>
 
 QJ_USING_NAMESPACE_FIT_USER
@@ -58,10 +57,7 @@ void UserAuthService::ShowAccountAuthDialog(QWidget* parent)
     const QUrl loginUrl = buildDesktopLoginUrl(_cfg.frontendBaseUrl);
     AccountAuthDialog dlg(parent, loginUrl);
     connect(&dlg, &AccountAuthDialog::AuthSucceeded, this, &UserAuthService::OnLoginSucceeded);
-    const int r = dlg.exec();
-    if (r == QDialog::Accepted && _userSession.IsAuthenticated()) {
-        QMessageBox::information(parent, QObject::tr("提示"), QObject::tr("登录成功"));
-    }
+    dlg.exec();
 }
 
 void UserAuthService::Logout()
@@ -91,6 +87,46 @@ void UserAuthService::InitFromStoredToken()
     data.insert(QStringLiteral("loggedIn"), true);
     _userSession.ApplyFromProbe(data);
     StartDirectUserHydration(token, true);
+}
+
+void UserAuthService::BuildExternalWebSsoUrl(const QString& redirectPath, WebSsoUrlCallback callback)
+{
+    if (!callback) {
+        return;
+    }
+
+    const QString token = _userSession.AuthToken().trimmed();
+    if (token.isEmpty()) {
+        callback(QUrl(), QStringLiteral("Not logged in"));
+        return;
+    }
+    if (!_authClient) {
+        callback(QUrl(), QStringLiteral("Auth service unavailable"));
+        return;
+    }
+
+    _authClient->Post(QStringLiteral("/api/auth/exchange/web-ticket"), token, 10,
+        [this, redirectPath, cb = std::move(callback)](const AuthHttpClient::Response& resp) mutable {
+            if (!resp.networkOk) {
+                cb(QUrl(), QStringLiteral("Network error"));
+                return;
+            }
+            if (resp.bizCode != 200) {
+                const QString msg = resp.bizMsg.trimmed().isEmpty()
+                    ? QStringLiteral("Failed to create SSO ticket")
+                    : resp.bizMsg.trimmed();
+                cb(QUrl(), msg);
+                return;
+            }
+
+            const QString ticket = resp.data.value(QStringLiteral("ticket")).toString().trimmed();
+            if (ticket.isEmpty()) {
+                cb(QUrl(), QStringLiteral("SSO ticket is missing"));
+                return;
+            }
+
+            cb(buildExternalSsoLoginUrl(_cfg.externalFrontendBaseUrl, ticket, redirectPath), QString());
+        });
 }
 
 void UserAuthService::StartDirectUserHydration(const QString& token, bool allowRefresh)
@@ -230,3 +266,4 @@ void UserAuthService::TryRefreshUserProfileOnWindowActivate()
 }
 
 QJ_NAMESPACE_FIT_USER_END
+

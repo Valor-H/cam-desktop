@@ -1,4 +1,4 @@
-#include "FileManagerDialog.h"
+#include "FileManagerView.h"
 
 #include "AuthHttpClient.h"
 #include "LocalFilesBridge.h"
@@ -6,17 +6,16 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QPalette>
 #include <QPointer>
 #include <QRegularExpression>
-#include <QStandardPaths>
+#include <QSizePolicy>
 #include <QVariantMap>
 #include <QVariantList>
 #include <QVBoxLayout>
-
-#include <QJsonDocument>
-#include <QJsonObject>
+#include <QtMath>
 
 #include <QtConcurrent/QtConcurrentRun>
 
@@ -27,6 +26,7 @@ namespace
 {
 constexpr int kQjpFileType = 11;
 constexpr int kRecentFileDownloadTimeoutSec = 60;
+constexpr double kEmbeddedPageScale = 0.90;
 
 #ifndef CAMDEMO_RECENT_FILE_CACHE_DIR
 #define CAMDEMO_RECENT_FILE_CACHE_DIR "D:/cachePath/"
@@ -51,16 +51,26 @@ QString sanitizeFileSegment(QString value)
     value.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9._-]")), QStringLiteral("_"));
     return value;
 }
+
+double zoomFactorToLevel(double factor)
+{
+    if (factor <= 0.0 || qFuzzyCompare(factor, 1.0)) {
+        return 0.0;
+    }
+
+    return qLn(factor) / qLn(1.2);
+}
 }
 
-FileManagerDialog::FileManagerDialog(QWidget* parent, qianjizn::user::UserAuthService* authService, const QUrl& pageUrl)
-    : QDialog(parent)
-    , m_authService(authService)
+FileManagerView::FileManagerView(QWidget* parent, qianjizn::user::UserAuthService* authService, const QUrl& pageUrl)
+    : QWidget(parent)
     , m_pageUrl(pageUrl)
+    , m_authService(authService)
 {
-    setWindowTitle(tr("文件管理"));
-    resize(1200, 760);
+    setObjectName(QStringLiteral("embeddedFileManagerOverlay"));
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setAutoFillBackground(true);
+    setContentsMargins(0, 0, 0, 0);
 
     QPalette pal = palette();
     pal.setColor(QPalette::Window, Qt::white);
@@ -96,25 +106,102 @@ FileManagerDialog::FileManagerDialog(QWidget* parent, qianjizn::user::UserAuthSe
     connect(m_snapshotWatcher, &QFutureWatcher<LocalFilesSnapshot::Result>::finished, this, [this]() {
         PushLocalFilesSnapshot(m_snapshotWatcher->result());
     });
+    if (m_authService && m_authService->Session()) {
+        connect(m_authService->Session(), &qianjizn::user::UserSession::AuthStateChanged, this, [this](bool) {
+            SyncAuthStateToWeb();
+        });
+        connect(m_authService->Session(), &qianjizn::user::UserSession::UserProfileChanged, this, [this]() {
+            SyncAuthStateToWeb();
+        });
+    }
 }
 
-FileManagerDialog::~FileManagerDialog() = default;
+FileManagerView::~FileManagerView() = default;
 
-void FileManagerDialog::InjectDesktopBridgeScript()
+void FileManagerView::NavigateTo(const QUrl& pageUrl)
+{
+    m_pageUrl = pageUrl;
+    if (!m_view) {
+        return;
+    }
+
+    m_view->navigateToUrl(m_pageUrl.toString());
+}
+
+void FileManagerView::ApplyEmbeddedScale()
 {
     if (!m_view) {
         return;
     }
+
+    m_view->setZoomLevel(zoomFactorToLevel(kEmbeddedPageScale));
+}
+
+void FileManagerView::InjectDesktopBridgeScript()
+{
+    if (!m_view) {
+        return;
+    }
+
     m_view->executeJavascript(QCefView::MainFrameID, LocalFilesBridge::BridgeInjectScript(), m_pageUrl.toString());
 }
 
-void FileManagerDialog::OnLoadEnd()
+void FileManagerView::SyncAuthStateToWeb()
 {
-    InjectDesktopBridgeScript();
+    if (!m_authService || !m_authService->Session() || !m_authService->Session()->IsAuthenticated()) {
+        return;
+    }
+    PushCurrentAuthStateToWeb();
 }
 
-void FileManagerDialog::OnInvokeMethod(const QString& method, const QVariantList& arguments)
+void FileManagerView::PushCurrentAuthStateToWeb()
 {
+    if (!m_view || !m_authService || !m_authService->Session()) {
+        return;
+    }
+
+    const QString token = m_authService->Session()->AuthToken().trimmed();
+    const QVariantMap currentUser = m_authService->Session()->CurrentUser();
+    if (token.isEmpty() || currentUser.isEmpty()) {
+        return;
+    }
+
+    const QJsonObject payload {
+        { QStringLiteral("token"), token },
+        { QStringLiteral("user"), QJsonObject::fromVariantMap(currentUser) },
+    };
+    const QString json = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
+    const QString script = QStringLiteral(
+        "(function(){"
+        "if(typeof window.__DESKTOP_WEB_onLoginSuccess__==='function'){"
+        "window.__DESKTOP_WEB_onLoginSuccess__(%1);"
+        "}"
+        "})();")
+                               .arg(json);
+    m_view->executeJavascript(QCefView::MainFrameID, script, m_pageUrl.toString());
+}
+
+void FileManagerView::OnLoadEnd()
+{
+    ApplyEmbeddedScale();
+    InjectDesktopBridgeScript();
+    SyncAuthStateToWeb();
+}
+
+void FileManagerView::OnInvokeMethod(const QString& method, const QVariantList& arguments)
+{
+    if (method == LocalFilesBridge::MethodRequestLogin()) {
+        if (!m_authService) {
+            return;
+        }
+
+        m_authService->ShowAccountAuthDialog(this);
+        if (m_authService->Session()->IsAuthenticated()) {
+            PushCurrentAuthStateToWeb();
+        }
+        return;
+    }
+
     if (method == LocalFilesBridge::MethodRequestLocalFiles()) {
         RequestLocalFilesSnapshot();
         return;
@@ -126,7 +213,7 @@ void FileManagerDialog::OnInvokeMethod(const QString& method, const QVariantList
     }
 }
 
-void FileManagerDialog::RequestLocalFilesSnapshot()
+void FileManagerView::RequestLocalFilesSnapshot()
 {
     if (!m_snapshotWatcher || m_snapshotWatcher->isRunning()) {
         return;
@@ -137,7 +224,7 @@ void FileManagerDialog::RequestLocalFilesSnapshot()
     }));
 }
 
-void FileManagerDialog::PushLocalFilesSnapshot(const LocalFilesSnapshot::Result& result)
+void FileManagerView::PushLocalFilesSnapshot(const LocalFilesSnapshot::Result& result)
 {
     if (!m_view) {
         return;
@@ -146,8 +233,8 @@ void FileManagerDialog::PushLocalFilesSnapshot(const LocalFilesSnapshot::Result&
     QJsonObject payload {
         { QStringLiteral("rootPath"), result.rootPath },
     };
-    QString script;
 
+    QString script;
     if (result.ok) {
         payload.insert(QStringLiteral("files"), result.files);
         const QString json = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
@@ -174,10 +261,11 @@ void FileManagerDialog::PushLocalFilesSnapshot(const LocalFilesSnapshot::Result&
     m_view->executeJavascript(QCefView::MainFrameID, script, m_pageUrl.toString());
 }
 
-void FileManagerDialog::HandleOpenRecentFileRequest(const QVariantMap& payload)
+void FileManagerView::HandleOpenRecentFileRequest(const QVariantMap& payload)
 {
     if (!IsDesktopRecentRequest(payload)) {
-        NotifyOpenRecentFileError(QStringLiteral("仅支持桌面端最近文件中的 QJP 打开"), QStringLiteral("recent_open_rejected"));
+        NotifyOpenRecentFileError(QStringLiteral("Only recent desktop QJP files can be opened here."),
+                                  QStringLiteral("recent_open_rejected"));
         return;
     }
 
@@ -186,7 +274,8 @@ void FileManagerDialog::HandleOpenRecentFileRequest(const QVariantMap& payload)
         if (OpenRecentLocalFile(payload)) {
             return;
         }
-        NotifyOpenRecentFileError(QStringLiteral("本地 QJP 文件无效或无法打开"), QStringLiteral("recent_local_invalid"));
+        NotifyOpenRecentFileError(QStringLiteral("The local QJP file is invalid or cannot be opened."),
+                                  QStringLiteral("recent_local_invalid"));
         return;
     }
 
@@ -195,10 +284,10 @@ void FileManagerDialog::HandleOpenRecentFileRequest(const QVariantMap& payload)
         return;
     }
 
-    NotifyOpenRecentFileError(QStringLiteral("未知的最近文件来源"), QStringLiteral("recent_source_invalid"));
+    NotifyOpenRecentFileError(QStringLiteral("Unknown recent file source."), QStringLiteral("recent_source_invalid"));
 }
 
-bool FileManagerDialog::OpenRecentLocalFile(const QVariantMap& payload)
+bool FileManagerView::OpenRecentLocalFile(const QVariantMap& payload)
 {
     const QString filePath = ResolveRecentLocalPath(payload);
     const QFileInfo fileInfo(filePath);
@@ -212,10 +301,11 @@ bool FileManagerDialog::OpenRecentLocalFile(const QVariantMap& payload)
     return true;
 }
 
-void FileManagerDialog::OpenRecentCloudFile(const QVariantMap& payload)
+void FileManagerView::OpenRecentCloudFile(const QVariantMap& payload)
 {
     if (!m_authService) {
-        NotifyOpenRecentFileError(QStringLiteral("桌面认证服务不可用"), QStringLiteral("recent_open_no_auth_service"));
+        NotifyOpenRecentFileError(QStringLiteral("Desktop authentication service is unavailable."),
+                                  QStringLiteral("recent_open_no_auth_service"));
         return;
     }
 
@@ -225,11 +315,13 @@ void FileManagerDialog::OpenRecentCloudFile(const QVariantMap& payload)
     const QString fileUuid = payload.value(QStringLiteral("fileUuid")).toString().trimmed();
 
     if (token.isEmpty() || userUuid.isEmpty()) {
-        NotifyOpenRecentFileError(QStringLiteral("当前登录态缺少 token 或用户 uuid"), QStringLiteral("recent_open_no_auth"));
+        NotifyOpenRecentFileError(QStringLiteral("Current session is missing token or user UUID."),
+                                  QStringLiteral("recent_open_no_auth"));
         return;
     }
     if (fileUuid.isEmpty()) {
-        NotifyOpenRecentFileError(QStringLiteral("云端最近文件缺少 fileUuid"), QStringLiteral("recent_open_no_uuid"));
+        NotifyOpenRecentFileError(QStringLiteral("Cloud recent file request is missing fileUuid."),
+                                  QStringLiteral("recent_open_no_uuid"));
         return;
     }
 
@@ -237,13 +329,15 @@ void FileManagerDialog::OpenRecentCloudFile(const QVariantMap& payload)
     const QFileInfo cacheInfo(cacheFilePath);
     QDir cacheDir(cacheInfo.dir());
     if (!cacheDir.exists() && !cacheDir.mkpath(QStringLiteral("."))) {
-        NotifyOpenRecentFileError(QStringLiteral("无法创建缓存目录"), QStringLiteral("recent_open_cache_dir_failed"));
+        NotifyOpenRecentFileError(QStringLiteral("Failed to create cache directory."),
+                                  QStringLiteral("recent_open_cache_dir_failed"));
         return;
     }
 
     AuthHttpClient* httpClient = EnsureFileHttpClient();
     if (!httpClient) {
-        NotifyOpenRecentFileError(QStringLiteral("桌面下载客户端初始化失败"), QStringLiteral("recent_open_http_unavailable"));
+        NotifyOpenRecentFileError(QStringLiteral("Desktop download client initialization failed."),
+                                  QStringLiteral("recent_open_http_unavailable"));
         return;
     }
 
@@ -252,7 +346,7 @@ void FileManagerDialog::OpenRecentCloudFile(const QVariantMap& payload)
         { QStringLiteral("UserUuid"), userUuid },
     };
 
-    QPointer<FileManagerDialog> self(this);
+    QPointer<FileManagerView> self(this);
     httpClient->PostJsonToFile(
         QStringLiteral("/api/file/getFile"),
         token,
@@ -266,13 +360,15 @@ void FileManagerDialog::OpenRecentCloudFile(const QVariantMap& payload)
 
             if (!response.networkOk) {
                 QFile::remove(response.targetFilePath);
-                self->NotifyOpenRecentFileError(QStringLiteral("云文件下载失败：%1").arg(response.errorMessage), QStringLiteral("recent_open_cloud_network"));
+                self->NotifyOpenRecentFileError(QStringLiteral("Cloud file download failed: %1").arg(response.errorMessage),
+                                                QStringLiteral("recent_open_cloud_network"));
                 return;
             }
 
             if (!response.writeOk) {
                 QFile::remove(response.targetFilePath);
-                self->NotifyOpenRecentFileError(QStringLiteral("云文件缓存失败：%1").arg(response.errorMessage), QStringLiteral("recent_open_cloud_cache"));
+                self->NotifyOpenRecentFileError(QStringLiteral("Cloud file cache write failed: %1").arg(response.errorMessage),
+                                                QStringLiteral("recent_open_cloud_cache"));
                 return;
             }
 
@@ -281,7 +377,7 @@ void FileManagerDialog::OpenRecentCloudFile(const QVariantMap& payload)
         });
 }
 
-QString FileManagerDialog::ResolveRecentLocalPath(const QVariantMap& payload) const
+QString FileManagerView::ResolveRecentLocalPath(const QVariantMap& payload) const
 {
     const QString path = payload.value(QStringLiteral("path")).toString().trimmed();
     if (!path.isEmpty()) {
@@ -292,10 +388,11 @@ QString FileManagerDialog::ResolveRecentLocalPath(const QVariantMap& payload) co
     if (fileUuid.startsWith(QStringLiteral("local::"))) {
         return QDir::fromNativeSeparators(fileUuid.mid(QStringLiteral("local::").size()));
     }
+
     return QString();
 }
 
-QString FileManagerDialog::BuildCacheFilePath(const QVariantMap& payload) const
+QString FileManagerView::BuildCacheFilePath(const QVariantMap& payload) const
 {
     const QString fileName = payload.value(QStringLiteral("fileName")).toString().trimmed();
     QString candidate = sanitizeFileSegment(fileName);
@@ -311,7 +408,7 @@ QString FileManagerDialog::BuildCacheFilePath(const QVariantMap& payload) const
         + QLatin1Char('/') + candidate;
 }
 
-bool FileManagerDialog::IsDesktopRecentRequest(const QVariantMap& payload) const
+bool FileManagerView::IsDesktopRecentRequest(const QVariantMap& payload) const
 {
     const QString path = m_pageUrl.path().trimmed();
     const bool isRecentRoute = path == QStringLiteral("/local-files") || path == QStringLiteral("/recent-files");
@@ -325,7 +422,7 @@ bool FileManagerDialog::IsDesktopRecentRequest(const QVariantMap& payload) const
         && (source == QStringLiteral("local") || source == QStringLiteral("cloud"));
 }
 
-void FileManagerDialog::NotifyOpenRecentFileError(const QString& message, const QString& code)
+void FileManagerView::NotifyOpenRecentFileError(const QString& message, const QString& code)
 {
     if (!m_view) {
         return;
@@ -342,11 +439,11 @@ void FileManagerDialog::NotifyOpenRecentFileError(const QString& message, const 
         "window.__DESKTOP_QT__.onOpenRecentFileError(%1);"
         "}"
         "})();")
-        .arg(json);
+                               .arg(json);
     m_view->executeJavascript(QCefView::MainFrameID, script, m_pageUrl.toString());
 }
 
-void FileManagerDialog::NotifyOpenRecentFileSuccess(const QString& openedPath)
+void FileManagerView::NotifyOpenRecentFileSuccess(const QString& openedPath)
 {
     if (!m_view) {
         return;
@@ -362,11 +459,11 @@ void FileManagerDialog::NotifyOpenRecentFileSuccess(const QString& openedPath)
         "window.__DESKTOP_QT__.onOpenRecentFileSuccess(%1);"
         "}"
         "})();")
-        .arg(json);
+                               .arg(json);
     m_view->executeJavascript(QCefView::MainFrameID, script, m_pageUrl.toString());
 }
 
-AuthHttpClient* FileManagerDialog::EnsureFileHttpClient()
+AuthHttpClient* FileManagerView::EnsureFileHttpClient()
 {
     if (m_fileHttpClient) {
         return m_fileHttpClient;
