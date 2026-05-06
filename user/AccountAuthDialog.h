@@ -7,6 +7,7 @@
 #include <QVariantMap>
 #include <QUrl>
 
+class QCefQuery;
 class QCefView;
 class QWidget;
 
@@ -24,12 +25,10 @@ signals:
 private slots:
     void OnAddressChanged(const QString& url);
     void OnLoadEnd(int httpStatusCode);
-    void OnInvokeMethod(const QString& method, const QVariantList& arguments);
+    void OnCefQueryRequest(const QCefQuery& query);
 
 private:
-    bool IsTrustedInvokeSource() const;
     bool IsTrustedUiSource() const;
-    void InjectDesktopBridgeScript();
     void HandleAuthSucceeded(const QVariantMap& payload);
     void SyncWindowTitleFromCurrentUrl();
     void UpdateUiFromUrl(const QUrl& url);

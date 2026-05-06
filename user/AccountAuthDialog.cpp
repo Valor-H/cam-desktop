@@ -1,8 +1,12 @@
 #include "AccountAuthDialog.h"
 
-#include "DesktopAuthBridge.h"
+#include "DesktopAuthMessages.h"
 #include "LoginWebAuthHelpers.h"
 
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
+#include <QByteArray>
 #include <QUrl>
 #include <QVariantList>
 #include <QVBoxLayout>
@@ -10,6 +14,7 @@
 #include <QWidget>
 #include <QPalette>
 
+#include <QCefQuery.h>
 #include <QCefSetting.h>
 #include <QCefView.h>
 
@@ -55,33 +60,19 @@ AccountAuthDialog::AccountAuthDialog(QWidget* parent, const QUrl& authPageUrl)
                 }
             });
     connect(m_view,
-            &QCefView::invokeMethod,
+            &QCefView::cefQueryRequest,
             this,
-            [this](const QCefBrowserId&, const QCefFrameId&, const QString& method, const QVariantList& arguments) {
-                OnInvokeMethod(method, arguments);
+            [this](const QCefBrowserId&, const QCefFrameId&, const QCefQuery& query) {
+                OnCefQueryRequest(query);
             });
 }
 
 AccountAuthDialog::~AccountAuthDialog()
 {}
 
-bool AccountAuthDialog::IsTrustedInvokeSource() const
-{
-    return LoginWebAuth::IsTrustedInvokeSource(m_currentUrl, m_authPageUrl);
-}
-
 bool AccountAuthDialog::IsTrustedUiSource() const
 {
     return LoginWebAuth::IsTrustedUiSource(m_currentUrl, m_authPageUrl);
-}
-
-void AccountAuthDialog::InjectDesktopBridgeScript()
-{
-    if (!m_view) {
-        return;
-    }
-    m_view->executeJavascript(QCefView::MainFrameID, DesktopAuthBridge::BridgeInjectScript(),
-                              m_authPageUrl.toString());
 }
 
 void AccountAuthDialog::HandleAuthSucceeded(const QVariantMap& payload)
@@ -126,36 +117,35 @@ void AccountAuthDialog::SyncWindowTitleFromCurrentUrl()
 void AccountAuthDialog::OnLoadEnd(int httpStatusCode)
 {
     Q_UNUSED(httpStatusCode);
-    InjectDesktopBridgeScript();
     UpdateUiFromUrl(m_currentUrl);
 }
 
-void AccountAuthDialog::OnInvokeMethod(const QString& method, const QVariantList& arguments)
+void AccountAuthDialog::OnCefQueryRequest(const QCefQuery& query)
 {
-    if (method == DesktopAuthBridge::MethodOnLoginSuccess()) {
-        if (!IsTrustedInvokeSource()) {
-            return;
-        }
-
-        QVariantMap payload;
-        if (!arguments.isEmpty()) {
-            payload = LoginWebAuth::SanitizeLoginPayload(arguments.front().toMap());
-        }
-        HandleAuthSucceeded(payload);
+    if (!m_view || !LoginWebAuth::IsTrustedInvokeSource(m_currentUrl, m_authPageUrl)) {
         return;
     }
 
-    if (method == DesktopAuthBridge::MethodRouteChanged()) {
-        if (arguments.isEmpty()) {
-            return;
-        }
-        const QVariantMap data = arguments.front().toMap();
-        const QString href = data.value(QStringLiteral("href")).toString().trimmed();
-        if (href.isEmpty()) {
-            return;
-        }
+    QString method;
+    QVariantMap payload;
+    const QByteArray rawRequest = query.request().toUtf8();
+    QJsonParseError parseError {};
+    const QJsonDocument document = QJsonDocument::fromJson(rawRequest, &parseError);
+    if (parseError.error == QJsonParseError::NoError && document.isObject()) {
+        const QJsonObject requestObject = document.object();
+        method = requestObject.value(QStringLiteral("method")).toString().trimmed();
+        payload = requestObject.value(QStringLiteral("payload")).toObject().toVariantMap();
+    } else {
+        method = QString::fromUtf8(rawRequest).trimmed();
+    }
 
-        UpdateUiFromUrl(QUrl(href));
+    if (method != DesktopAuthMessages::MethodOnLoginSuccess()) {
         return;
     }
+
+    HandleAuthSucceeded(LoginWebAuth::SanitizeLoginPayload(payload));
+
+    QCefQuery successQuery = query;
+    successQuery.reply(true, QStringLiteral("{}"));
+    m_view->responseQCefQuery(successQuery);
 }

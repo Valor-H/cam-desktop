@@ -11,6 +11,8 @@
 #include <QVariant>
 #include <QWidget>
 
+#include <QCefQuery.h>
+
 class QString;
 
 class QCefView;
@@ -30,21 +32,21 @@ signals:
 
 private:
     void ApplyEmbeddedScale();
-    void InjectDesktopBridgeScript();
     void SyncAuthStateToWeb();
     void PushCurrentAuthStateToWeb();
     void OnLoadEnd();
-    void OnInvokeMethod(const QString& method, const QVariantList& arguments);
-    void RequestLocalFilesSnapshot();
+    void OnCefQueryRequest(const QCefQuery& query);
+    void HandleDesktopLoginRequest(const QCefQuery* query = nullptr);
+    void RequestLocalFilesSnapshot(const QCefQuery* query = nullptr);
     void PushLocalFilesSnapshot(const LocalFilesSnapshot::Result& result);
-    void HandleOpenRecentFileRequest(const QVariantMap& payload);
+    void HandleOpenRecentFileRequest(const QVariantMap& payload, const QCefQuery* query = nullptr);
     bool OpenRecentLocalFile(const QVariantMap& payload);
-    void OpenRecentCloudFile(const QVariantMap& payload);
+    void OpenRecentCloudFile(const QVariantMap& payload, const QCefQuery* query = nullptr);
     QString ResolveRecentLocalPath(const QVariantMap& payload) const;
     QString BuildCacheFilePath(const QVariantMap& payload) const;
     bool IsDesktopRecentRequest(const QVariantMap& payload) const;
-    void NotifyOpenRecentFileError(const QString& message, const QString& code = QStringLiteral("recent_open_failed"));
-    void NotifyOpenRecentFileSuccess(const QString& openedPath);
+    void ReplyOpenRecentFileError(const QCefQuery& query, const QString& message, int errorCode = 500);
+    void ReplyOpenRecentFileSuccess(const QCefQuery& query, const QString& openedPath);
     AuthHttpClient* EnsureFileHttpClient();
 
     QUrl m_pageUrl;
@@ -52,4 +54,8 @@ private:
     QFutureWatcher<LocalFilesSnapshot::Result>* m_snapshotWatcher { nullptr };
     AuthHttpClient* m_fileHttpClient { nullptr };
     qianjizn::user::UserAuthService* m_authService { nullptr };
+    QCefQuery m_pendingLocalFilesQuery;
+    bool m_hasPendingLocalFilesQuery { false };
+    QCefQuery m_pendingOpenRecentFileQuery;
+    bool m_hasPendingOpenRecentFileQuery { false };
 };

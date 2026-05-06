@@ -40,6 +40,7 @@ QCefContext* QCefRuntime::Context() const
 void QCefRuntime::InitConfig()
 {
     m_config.setLogLevel(QCefConfig::LOGSEVERITY_DEFAULT);
+    // Keep the bridge object so the web layer can subscribe to QCefEvent via CallBridge.addEventListener.
     m_config.setBridgeObjectName(QStringLiteral("CallBridge"));
     m_config.setBuiltinSchemeName(QStringLiteral("CefView"));
     m_config.setRemoteDebuggingPort(0);
