@@ -8,7 +8,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMetaObject>
-#include <QTcpSocket>
 #include <QThread>
 
 using qianjizn::user::UserAuthService;
@@ -112,7 +111,6 @@ QString DesktopFrontendServer::BuildBootstrapJson() const
     const BootstrapSnapshot snapshot = CaptureSnapshotSync();
     QJsonObject payload {
         { QStringLiteral("loggedIn"), snapshot.loggedIn },
-        { QStringLiteral("offline"), snapshot.offline },
         { QStringLiteral("BackendUrl"), snapshot.backendUrl },
         { QStringLiteral("WebsocketUrl"), snapshot.websocketUrl },
         { QStringLiteral("HelpDocUrl"), snapshot.helpDocUrl },
@@ -139,7 +137,6 @@ DesktopFrontendServer::BootstrapSnapshot DesktopFrontendServer::CaptureSnapshot(
     snapshot.token = m_authService->Session()->AuthToken().trimmed();
     snapshot.user = m_authService->Session()->CurrentUser();
     snapshot.loggedIn = m_authService->Session()->IsAuthenticated() && !snapshot.token.isEmpty();
-    snapshot.offline = !IsApiReachable();
     return snapshot;
 }
 
@@ -153,32 +150,6 @@ DesktopFrontendServer::BootstrapSnapshot DesktopFrontendServer::CaptureSnapshotS
     QMetaObject::invokeMethod(const_cast<DesktopFrontendServer*>(this), [&]() { snapshot = CaptureSnapshot(); },
                               Qt::BlockingQueuedConnection);
     return snapshot;
-}
-
-bool DesktopFrontendServer::IsApiReachable() const
-{
-    if (!m_authService) {
-        return false;
-    }
-
-    const QUrl apiBaseUrl = m_authService->ApiBaseUrl();
-    const QString host = apiBaseUrl.host().trimmed();
-    if (host.isEmpty()) {
-        return false;
-    }
-
-    int port = apiBaseUrl.port();
-    if (port <= 0) {
-        port = apiBaseUrl.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) == 0 ? 443 : 80;
-    }
-
-    QTcpSocket socket;
-    socket.connectToHost(host, static_cast<quint16>(port));
-    const bool connected = socket.waitForConnected(250);
-    if (connected) {
-        socket.disconnectFromHost();
-    }
-    return connected;
 }
 
 QString DesktopFrontendServer::ResolveStaticFilePath(const QString& requestPath) const

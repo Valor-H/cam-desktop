@@ -27,7 +27,6 @@ private:
     struct BootstrapSnapshot
     {
         bool loggedIn { false };
-        bool offline { false };
         QString backendUrl;
         QString websocketUrl;
         QString helpDocUrl;
@@ -41,7 +40,6 @@ private:
     QString BuildBootstrapJson() const;
     BootstrapSnapshot CaptureSnapshot() const;
     BootstrapSnapshot CaptureSnapshotSync() const;
-    bool IsApiReachable() const;
     QString ResolveStaticFilePath(const QString& requestPath) const;
     QString WebRootPath() const;
 
