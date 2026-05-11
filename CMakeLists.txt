@@ -12,15 +12,13 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_CXX_STANDARD 17)
 
-# ========== 1. 查找 Qt ==========
+# 1. Qt
 set(CMAKE_PREFIX_PATH "D:/Tools/Qt/5.15.2/msvc2019_64")
-find_package(Qt5 COMPONENTS Core Gui Widgets Network Concurrent LinguistTools REQUIRED)
+find_package(Qt5 COMPONENTS Core Gui Widgets Network Concurrent REQUIRED)
 
-# ========== 2. QCefView（由 user 模块内部使用）==========
-# 布局：./3rdparty/QCefView/Debug/bin/QCefView.dll、Debug/lib/QCefView.lib（与 Release 对称）
+# 2. QCefView
 set(QCEF_ROOT "D:/Codes/3rdparty/QCefView")
 
-# QCefView 导入库（user 模块和主程序都需要链接）
 add_library(QCefView SHARED IMPORTED GLOBAL)
 set_target_properties(QCefView PROPERTIES
     IMPORTED_CONFIGURATIONS "Debug;Release"
@@ -31,12 +29,12 @@ set_target_properties(QCefView PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES "${QCEF_ROOT}/include"
 )
 
-# ========== 3. SARibbonBar ==========
+# 3. SARibbonBar
 set(SARibbonBar_DIR "D:/Codes/3rdparty/SARibbon/lib/cmake/SARibbonBar")
 find_package(SARibbonBar REQUIRED)
 set(SARIBBON_DLL "D:/Codes/3rdparty/SARibbon/bin/SARibbonBard.dll")
 
-# ========== 4. libhv ==========
+# 4. libhv
 set(LIBHV_ROOT "D:/Codes/3rdparty/libhv/installed_debug")
 add_library(libhv SHARED IMPORTED GLOBAL)
 set_target_properties(libhv PROPERTIES
@@ -46,62 +44,8 @@ set_target_properties(libhv PROPERTIES
     INTERFACE_LINK_LIBRARIES "secur32;crypt32;winmm;iphlpapi;ws2_32"
 )
 
-# ========== 5. user 模块 ==========
+# 5. modules
+add_subdirectory(project_management)
 add_subdirectory(user)
-
-# ========== 6. 主程序 ==========
-add_executable(CamDemo WIN32
-    main.cpp
-    NApplication.cpp
-    NApplication.h
-    NMainWindow.cpp
-    NMainWindow.h
-    MockMainWorkspace.h
-    DesktopFrontendServer.cpp
-    DesktopFrontendServer.h
-    QCefRuntime.cpp
-    QCefRuntime.h
-    CamDemo.cpp
-    CamDemo.h
-    TitleBarUserChip.cpp
-    TitleBarUserChip.h
-    CamDemo.ui
-    CamDemo.qrc
-)
-
-# ========== 7. 翻译 ==========
-set(CAMDEMO_TS_FILES ${CMAKE_CURRENT_SOURCE_DIR}/translations/CamDemo_zh_CN.ts)
-qt5_add_translation(CAMDemo_QM_FILES ${CAMDEMO_TS_FILES})
-add_custom_target(CamDemoTranslations ALL DEPENDS ${CAMDemo_QM_FILES})
-add_dependencies(CamDemo CamDemoTranslations)
-
-# ========== 8. 链接 ==========
-# 注意：QCefView 必须同时链接，静态库依赖不会自动传递
-target_link_libraries(CamDemo PRIVATE
-    user
-    QCefView
-    SARibbonBar::SARibbonBar
-    Qt5::Core
-    Qt5::Gui
-    Qt5::Widgets
-    Qt5::Network
-)
-
-# ========== 9. 复制运行时文件 ==========
-add_custom_command(TARGET CamDemo POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory "${QCEF_ROOT}/$<CONFIG>/bin" "$<TARGET_FILE_DIR:CamDemo>"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LIBHV_ROOT}/bin/hv.dll" "$<TARGET_FILE_DIR:CamDemo>"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${SARIBBON_DLL}" "$<TARGET_FILE_DIR:CamDemo>"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:CamDemo>/translations"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${CAMDemo_QM_FILES} "$<TARGET_FILE_DIR:CamDemo>/translations"
-)
-
-# ========== 10. 属性 ==========
-set_target_properties(CamDemo PROPERTIES
-    VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:CamDemo>"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-)
-
-if(MSVC)
-    target_compile_options(CamDemo PRIVATE /utf-8)
-endif()
+add_subdirectory(ultramill)
+add_subdirectory(qjcam)

@@ -22,6 +22,7 @@ target_include_directories(user PUBLIC
 target_compile_definitions(user PRIVATE USER_LIBRARY)
 
 target_link_libraries(user PUBLIC
+    project_management
     Qt5::Core
     Qt5::Gui
     Qt5::Widgets

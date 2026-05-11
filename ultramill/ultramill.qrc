@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/ultramill">
+        <file>resource/avatar.png</file>
+    </qresource>
+</RCC>

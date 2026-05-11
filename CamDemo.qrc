@@ -1,6 +1,0 @@
-<RCC>
-    <qresource prefix="/CamDemo">
-        <file>resource/avatar.png</file>
-        <file>resource/logo.ico</file>
-    </qresource>
-</RCC>
