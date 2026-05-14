@@ -1,5 +1,6 @@
 #include "account_auth_dialog.h"
 
+#include "desktop_runtime_injection.h"
 #include "login_web_auth_helpers.h"
 
 #include <QJsonDocument>
@@ -21,9 +22,11 @@ namespace {
 const QString kMethodOnLoginSuccess = QStringLiteral("Desktop.OnLoginSuccess");
 }
 
-AccountAuthDialog::AccountAuthDialog(QWidget* parent, const QUrl& authPageUrl)
+AccountAuthDialog::AccountAuthDialog(
+    QWidget* parent, const QUrl& authPageUrl, qianjizn::user::UserAuthService* authService)
     : QDialog(parent)
     , m_authPageUrl(authPageUrl)
+    , m_authService(authService)
 {
     setWindowTitle(tr("Login"));
 
@@ -51,6 +54,14 @@ AccountAuthDialog::AccountAuthDialog(QWidget* parent, const QUrl& authPageUrl)
     layout->addWidget(m_view);
 
     connect(m_view,
+            &QCefView::loadStart,
+            this,
+            [this](const QCefBrowserId&, const QCefFrameId&, bool isMainFrame, int) {
+                if (isMainFrame) {
+                    OnLoadStart();
+                }
+            });
+    connect(m_view,
             &QCefView::addressChanged,
             this,
             [this](const QCefFrameId&, const QString& url) { OnAddressChanged(url); });
@@ -73,6 +84,11 @@ AccountAuthDialog::AccountAuthDialog(QWidget* parent, const QUrl& authPageUrl)
 AccountAuthDialog::~AccountAuthDialog()
 {}
 
+void AccountAuthDialog::InjectDesktopRuntime()
+{
+    qianjizn::user::InjectDesktopRuntimeIntoView(m_view, m_authService, m_currentUrl.toString());
+}
+
 bool AccountAuthDialog::IsTrustedUiSource() const
 {
     return LoginWebAuth::IsTrustedUiSource(m_currentUrl, m_authPageUrl);
@@ -87,6 +103,11 @@ void AccountAuthDialog::HandleAuthSucceeded(const QVariantMap& payload)
 void AccountAuthDialog::OnAddressChanged(const QString& url)
 {
     UpdateUiFromUrl(QUrl(url));
+}
+
+void AccountAuthDialog::OnLoadStart()
+{
+    InjectDesktopRuntime();
 }
 
 void AccountAuthDialog::UpdateUiFromUrl(const QUrl& url)
@@ -120,6 +141,7 @@ void AccountAuthDialog::SyncWindowTitleFromCurrentUrl()
 void AccountAuthDialog::OnLoadEnd(int httpStatusCode)
 {
     Q_UNUSED(httpStatusCode);
+    InjectDesktopRuntime();
     UpdateUiFromUrl(m_currentUrl);
 }
 

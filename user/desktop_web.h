@@ -13,10 +13,6 @@ inline QUrl buildDesktopLoginUrl(const QUrl& frontendBase)
     if (!url.path().endsWith(QLatin1Char('/'))) {
         url.setPath(url.path() + QLatin1Char('/'));
     }
-    QUrlQuery query(url);
-    query.removeAllQueryItems(QStringLiteral("source"));
-    query.addQueryItem(QStringLiteral("source"), QStringLiteral("desktop"));
-    url.setQuery(query);
     return url;
 }
 
@@ -38,11 +34,6 @@ inline QUrl buildExternalSsoLoginUrl(const QUrl& frontendBase, const QString& ti
 
 inline QUrl buildRecentFilesUrl(const QUrl& frontendBase)
 {
-    QUrl url = frontendBase.resolved(QUrl(QStringLiteral("recent-files")));
-    QUrlQuery query(url);
-    query.removeAllQueryItems(QStringLiteral("source"));
-    query.addQueryItem(QStringLiteral("source"), QStringLiteral("desktop"));
-    url.setQuery(query);
-    return url;
+    return frontendBase.resolved(QUrl(QStringLiteral("recent-files")));
 }
 QJ_NAMESPACE_FIT_USER_END

@@ -50,8 +50,10 @@ signals:
 
 private:
     void ApplyEmbeddedScale();
+    void InjectDesktopRuntime();
     void SyncAuthStateToWeb();
     void PushCurrentAuthStateToWeb();
+    void OnLoadStart();
     void OnLoadEnd();
     void OnCefQueryRequest(const QCefQuery& query);
     void HandleDesktopLoginRequest(const QCefQuery* query = nullptr);

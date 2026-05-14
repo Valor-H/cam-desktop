@@ -5,7 +5,6 @@
 #include <QScopedPointer>
 #include <QString>
 #include <QUrl>
-#include <QVariantMap>
 
 QJ_NAMESPACE_FIT_USER_BEGIN
 class UserAuthService;
@@ -21,21 +20,7 @@ public:
     QUrl BaseUrl() const;
 
 private:
-    struct BootstrapSnapshot
-    {
-        bool loggedIn { false };
-        QString backendUrl;
-        QString websocketUrl;
-        QString helpDocUrl;
-        QString mockServiceUrl;
-        QString token;
-        QVariantMap user;
-    };
-
     void ConfigureRoutes();
-    QString BuildBootstrapJson() const;
-    BootstrapSnapshot CaptureSnapshot() const;
-    BootstrapSnapshot CaptureSnapshotSync() const;
     QString ResolveStaticFilePath(const QString& requestPath) const;
     QString WebRootPath() const;
 

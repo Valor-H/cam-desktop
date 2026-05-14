@@ -1,6 +1,7 @@
 #include "file_manager_view.h"
 
 #include "auth_http_client.h"
+#include "desktop_runtime_injection.h"
 #include "local_files_snapshot.h"
 #include "user_auth_service.h"
 #include <QDateTime>
@@ -20,7 +21,6 @@
 #include <QShowEvent>
 #include <QSizePolicy>
 #include <QTimer>
-#include <QUrlQuery>
 #include <QVariantMap>
 #include <QVariantList>
 #include <QVBoxLayout>
@@ -61,16 +61,6 @@ QString apiBaseStringForClient(const QUrl& url)
     return baseUrl;
 }
 
-QUrl ensureDesktopSource(const QUrl& input)
-{
-    QUrl url = input;
-    QUrlQuery query(url);
-    query.removeAllQueryItems(QStringLiteral("source"));
-    query.addQueryItem(QStringLiteral("source"), QStringLiteral("desktop"));
-    url.setQuery(query);
-    return url;
-}
-
 QString sanitizeFileSegment(QString value)
 {
     value = value.trimmed();
@@ -94,7 +84,7 @@ double zoomFactorToLevel(double factor)
 
 FileManagerView::FileManagerView(QWidget* parent, qianjizn::user::UserAuthService* authService, const QUrl& pageUrl)
     : QWidget(parent)
-    , m_pageUrl(ensureDesktopSource(pageUrl))
+    , m_pageUrl(pageUrl)
     , m_authService(authService)
 {
     setObjectName(QStringLiteral("embeddedFileManagerOverlay"));
@@ -125,6 +115,14 @@ FileManagerView::FileManagerView(QWidget* parent, qianjizn::user::UserAuthServic
     m_snapshotWatcher = new QFutureWatcher<LocalFilesSnapshot::Result>(this);
 
     connect(m_view,
+            &QCefView::loadStart,
+            this,
+            [this](const QCefBrowserId&, const QCefFrameId&, bool isMainFrame, int) {
+                if (isMainFrame) {
+                    OnLoadStart();
+                }
+            });
+    connect(m_view,
             &QCefView::loadEnd,
             this,
             [this](const QCefBrowserId&, const QCefFrameId&, bool isMainFrame, int) {
@@ -135,7 +133,7 @@ FileManagerView::FileManagerView(QWidget* parent, qianjizn::user::UserAuthServic
     connect(m_view,
             &QCefView::addressChanged,
             this,
-            [this](const QCefFrameId&, const QString& url) { m_pageUrl = ensureDesktopSource(QUrl(url)); });
+            [this](const QCefFrameId&, const QString& url) { m_pageUrl = QUrl(url); });
     connect(m_view,
             &QCefView::cefQueryRequest,
             this,
@@ -169,6 +167,11 @@ void FileManagerView::RefreshCurrentPage()
     QCefEvent event(kEventDesktopOnResume);
     event.setArguments(QVariantList { json });
     m_view->triggerEvent(event, QCefView::MainFrameID);
+}
+
+void FileManagerView::InjectDesktopRuntime()
+{
+    qianjizn::user::InjectDesktopRuntimeIntoView(m_view, m_authService, m_pageUrl.toString());
 }
 
 void FileManagerView::SyncViewportGeometryNow()
@@ -242,6 +245,11 @@ void FileManagerView::ApplyEmbeddedScale()
     m_view->setZoomLevel(zoomFactorToLevel(kEmbeddedPageScale));
 }
 
+void FileManagerView::OnLoadStart()
+{
+    InjectDesktopRuntime();
+}
+
 void FileManagerView::SyncAuthStateToWeb()
 {
     if (!m_authService || !m_authService->Session()) {
@@ -255,6 +263,8 @@ void FileManagerView::PushCurrentAuthStateToWeb()
     if (!m_view || !m_authService || !m_authService->Session()) {
         return;
     }
+
+    InjectDesktopRuntime();
 
     const QString token = m_authService->Session()->AuthToken().trimmed();
     const QVariantMap currentUser = m_authService->Session()->CurrentUser();
@@ -274,6 +284,7 @@ void FileManagerView::PushCurrentAuthStateToWeb()
 
 void FileManagerView::OnLoadEnd()
 {
+    InjectDesktopRuntime();
     ApplyEmbeddedScale();
     SyncAuthStateToWeb();
 }

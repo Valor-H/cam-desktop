@@ -2,13 +2,8 @@
 
 #include "user_auth_service.h"
 
-#include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QMetaObject>
-#include <QThread>
 
 #include <hv/HttpServer.h>
 
@@ -91,22 +86,12 @@ void DesktopWebServer::ConfigureRoutes()
 {
     d->service.AllowCORS();
 
-    d->service.GET("/desktop-bootstrap.json", [this](HttpRequest*, HttpResponse* resp) {
-        resp->headers["Content-Type"] = "application/json; charset=utf-8";
-        resp->body = BuildBootstrapJson().toStdString();
-        return 200;
-    });
-
     d->service.Use([this](HttpRequest* req, HttpResponse* resp) {
         if (req->method != HTTP_GET && req->method != HTTP_HEAD) {
             return HTTP_STATUS_NEXT;
         }
 
         const QString path = normalizeRequestPath(req);
-        if (path == QStringLiteral("/desktop-bootstrap.json")) {
-            return HTTP_STATUS_NEXT;
-        }
-
         const QString filePath = ResolveStaticFilePath(path);
         if (!filePath.isEmpty()) {
             return resp->File(filePath.toStdString().c_str());
@@ -115,52 +100,6 @@ void DesktopWebServer::ConfigureRoutes()
         const QString indexPath = QDir(WebRootPath()).filePath(QStringLiteral("index.html"));
         return resp->File(indexPath.toStdString().c_str());
     });
-}
-
-QString DesktopWebServer::BuildBootstrapJson() const
-{
-    const BootstrapSnapshot snapshot = CaptureSnapshotSync();
-    QJsonObject payload {
-        { QStringLiteral("loggedIn"), snapshot.loggedIn },
-        { QStringLiteral("backendUrl"), snapshot.backendUrl },
-        { QStringLiteral("websocketUrl"), snapshot.websocketUrl },
-        { QStringLiteral("helpDocUrl"), snapshot.helpDocUrl },
-        { QStringLiteral("mockServiceUrl"), snapshot.mockServiceUrl },
-        { QStringLiteral("token"), snapshot.token },
-    };
-    if (!snapshot.user.isEmpty()) {
-        payload.insert(QStringLiteral("user"), QJsonObject::fromVariantMap(snapshot.user));
-    }
-    return QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
-}
-
-DesktopWebServer::BootstrapSnapshot DesktopWebServer::CaptureSnapshot() const
-{
-    BootstrapSnapshot snapshot;
-    if (!m_authService) {
-        return snapshot;
-    }
-
-    snapshot.backendUrl = m_authService->ApiBaseUrl().toString().trimmed();
-    snapshot.websocketUrl = m_authService->Config().websocketUrl.toString().trimmed();
-    snapshot.helpDocUrl = m_authService->Config().helpDocUrl.toString().trimmed();
-    snapshot.mockServiceUrl = m_authService->Config().mockServiceUrl.toString().trimmed();
-    snapshot.token = m_authService->Session()->AuthToken().trimmed();
-    snapshot.user = m_authService->Session()->CurrentUser();
-    snapshot.loggedIn = m_authService->Session()->IsAuthenticated() && !snapshot.token.isEmpty();
-    return snapshot;
-}
-
-DesktopWebServer::BootstrapSnapshot DesktopWebServer::CaptureSnapshotSync() const
-{
-    if (thread() == QThread::currentThread()) {
-        return CaptureSnapshot();
-    }
-
-    BootstrapSnapshot snapshot;
-    QMetaObject::invokeMethod(const_cast<DesktopWebServer*>(this), [&]() { snapshot = CaptureSnapshot(); },
-                              Qt::BlockingQueuedConnection);
-    return snapshot;
 }
 
 QString DesktopWebServer::ResolveStaticFilePath(const QString& requestPath) const
@@ -190,7 +129,7 @@ QString DesktopWebServer::ResolveStaticFilePath(const QString& requestPath) cons
 
 QString DesktopWebServer::WebRootPath() const
 {
-    return QStringLiteral("D:/Codes/cloud-cam-front/dist");
+    return QStringLiteral("D:/Codes/cloud-cam-front/dist/desktop");
 }
 
 QJ_NAMESPACE_FIT_USER_END
