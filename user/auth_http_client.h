@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QObject>
 #include <QString>
 #include <QVariantMap>
@@ -10,8 +11,6 @@
 
 class AuthHttpClient : public QObject
 {
-    Q_OBJECT
-
 public:
     struct Response
     {

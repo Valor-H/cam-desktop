@@ -2,21 +2,31 @@
 
 #include "user_global.h"
 
-#include "local_files_snapshot.h"
-#include "user_auth_service.h"
-
-#include <QByteArray>
-#include <QFutureWatcher>
 #include <QUrl>
-#include <QVariant>
+#include <QVariantMap>
 #include <QWidget>
 
 #include <QCefQuery.h>
 
 class QString;
+class QEvent;
+class QShowEvent;
+class QResizeEvent;
+template <typename T>
+class QFutureWatcher;
 
 class QCefView;
 class AuthHttpClient;
+class QWindow;
+
+namespace LocalFilesSnapshot
+{
+struct Result;
+}
+
+QJ_NAMESPACE_FIT_USER_BEGIN
+class UserAuthService;
+QJ_NAMESPACE_FIT_USER_END
 
 class USER_EXPORT FileManagerView : public QWidget
 {
@@ -25,7 +35,13 @@ class USER_EXPORT FileManagerView : public QWidget
 public:
     explicit FileManagerView(QWidget* parent, qianjizn::user::UserAuthService* authService, const QUrl& pageUrl);
     ~FileManagerView() override;
-    void NavigateTo(const QUrl& pageUrl);
+    void RefreshCurrentPage();
+    void SyncViewportGeometryNow();
+
+protected:
+    bool event(QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 signals:
     void OpenFileRequested(const QString& filePath);
@@ -50,9 +66,12 @@ private:
     void ReplyOpenRecentFileError(const QCefQuery& query, const QString& message, int errorCode = 500);
     void ReplyOpenRecentFileSuccess(const QCefQuery& query, const QString& openedPath);
     AuthHttpClient* EnsureFileHttpClient();
+    void SyncNativeBrowserWindowNow();
+    void ScheduleNativeBrowserWindowSync();
 
     QUrl m_pageUrl;
     QCefView* m_view { nullptr };
+    QWindow* m_nativeBrowserWindow { nullptr };
     QFutureWatcher<LocalFilesSnapshot::Result>* m_snapshotWatcher { nullptr };
     AuthHttpClient* m_fileHttpClient { nullptr };
     qianjizn::user::UserAuthService* m_authService { nullptr };
@@ -60,4 +79,5 @@ private:
     bool m_hasPendingLocalFilesQuery { false };
     QCefQuery m_pendingOpenRecentFileQuery;
     bool m_hasPendingOpenRecentFileQuery { false };
+    bool m_nativeBrowserSyncPending { false };
 };

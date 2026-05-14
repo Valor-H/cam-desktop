@@ -1,14 +1,14 @@
 #pragma once
 
-#include "ultramill_global.h"
+#include "user_global.h"
 #include <QCefConfig.h>
 #include <QPointer>
 
 class QCefContext;
 
-QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
+QJ_NAMESPACE_FIT_USER_BEGIN
 
-class QCefRuntime
+class USER_EXPORT QCefRuntime
 {
 public:
     static QCefRuntime& Instance();
@@ -28,4 +28,4 @@ private:
     QPointer<QCefContext> m_context;
 };
 
-QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END
+QJ_NAMESPACE_FIT_USER_END

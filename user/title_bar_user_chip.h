@@ -1,6 +1,5 @@
 #pragma once
 
-#include "ultramill_global.h"
 #include "user_global.h"
 
 #include <QUrl>
@@ -12,11 +11,8 @@ class QNetworkReply;
 
 QJ_NAMESPACE_FIT_USER_BEGIN
 class UserSession;
-QJ_NAMESPACE_FIT_USER_END
 
-QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
-
-class TitleBarUserChip final : public QWidget
+class USER_EXPORT TitleBarUserChip final : public QWidget
 {
     Q_OBJECT
 
@@ -25,7 +21,7 @@ public:
     static constexpr int kAvatarIconSide = 18;
 
     explicit TitleBarUserChip(QWidget* parent, const QUrl& apiBaseUrl);
-    void SyncFromSession(const qianjizn::user::UserSession* session);
+    void SyncFromSession(const UserSession* session);
     void RelayoutInParent();
 
 signals:
@@ -38,7 +34,7 @@ private slots:
 private:
     void AbortAvatarRequest();
     void ApplyDefaultAvatar();
-    void ApplyLoggedInAppearance(const qianjizn::user::UserSession* session);
+    void ApplyLoggedInAppearance(const UserSession* session);
     QPixmap MakeInitialAvatarWithRing(const QString& nickName, const QString& userName) const;
     static QString PickInitialChar(const QString& nickName, const QString& userName);
     QPixmap MakeCircularAvatar(const QPixmap& source) const;
@@ -55,6 +51,6 @@ private:
     QString _fallbackUserName;
 };
 
-QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END
+QJ_NAMESPACE_FIT_USER_END
 
 

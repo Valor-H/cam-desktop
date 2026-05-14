@@ -1,6 +1,5 @@
 #include "account_auth_dialog.h"
 
-#include "desktop_auth_messages.h"
 #include "login_web_auth_helpers.h"
 
 #include <QJsonDocument>
@@ -17,6 +16,10 @@
 #include <QCefQuery.h>
 #include <QCefSetting.h>
 #include <QCefView.h>
+
+namespace {
+const QString kMethodOnLoginSuccess = QStringLiteral("Desktop.OnLoginSuccess");
+}
 
 AccountAuthDialog::AccountAuthDialog(QWidget* parent, const QUrl& authPageUrl)
     : QDialog(parent)
@@ -139,7 +142,7 @@ void AccountAuthDialog::OnCefQueryRequest(const QCefQuery& query)
         method = QString::fromUtf8(rawRequest).trimmed();
     }
 
-    if (method != DesktopAuthMessages::MethodOnLoginSuccess()) {
+    if (method != kMethodOnLoginSuccess) {
         return;
     }
 

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "ultramill_global.h"
-#include "SARibbonMainWindow.h"
-#include "user_auth_service.h"
+#include <SARibbonBar/SARibbonMainWindow.h>
+#include <user/user_auth_service.h>
 
 class QAction;
 class QMenu;
@@ -11,11 +11,12 @@ class QUrl;
 class QWidget;
 class FileManagerView;
 
-QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
-
+QJ_NAMESPACE_FIT_USER_BEGIN
+class DesktopWebServer;
 class TitleBarUserChip;
-class DesktopFrontendServer;
-class MockMainWorkspace;
+QJ_NAMESPACE_FIT_USER_END
+
+QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
 class NMainWindow : public SARibbonMainWindow
 {
@@ -37,7 +38,7 @@ protected slots:
 
 private:
     void InitializeMainWindowShell();
-    bool EnsureDesktopFrontendServerReady(bool showWarning = true);
+    bool EnsureDesktopWebServerReady(bool showWarning = true);
     void InitRibbonBar();
     void InitUserChip();
     void InitCentralWorkspace();
@@ -60,15 +61,14 @@ private:
     QAction* _actionOpen { nullptr };
     QAction* _actionDocument { nullptr };
     qianjizn::user::UserAuthService _userAuth { qianjizn::user::UserModuleConfig {} };
-    DesktopFrontendServer* _desktopFrontendServer { nullptr };
-    MockMainWorkspace* _homeWorkspace { nullptr };
+    qianjizn::user::DesktopWebServer* _desktopWebServer { nullptr };
+    QWidget* _homeWorkspace { nullptr };
     FileManagerView* _fileManagerView { nullptr };
-    TitleBarUserChip* _userChip { nullptr };
+    qianjizn::user::TitleBarUserChip* _userChip { nullptr };
     QMenu* _loginMenu { nullptr };
     QAction* _personalCenterAction { nullptr };
     QAction* _teamAction { nullptr };
     QAction* _logoutAction { nullptr };
-    int _cefAuthRetryCount { 0 };
 };
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END

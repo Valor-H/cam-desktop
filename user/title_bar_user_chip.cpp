@@ -1,6 +1,6 @@
 #include "title_bar_user_chip.h"
 #include "user_session.h"
-#include "SARibbonToolButton.h"
+#include <SARibbonBar/SARibbonToolButton.h>
 
 #include <QHBoxLayout>
 #include <QLayout>
@@ -16,9 +16,7 @@
 #include <QUrl>
 #include <QSslSocket>
 
-QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
-
-using qianjizn::user::UserSession;
+QJ_NAMESPACE_FIT_USER_BEGIN
 
 namespace
 {
@@ -263,7 +261,6 @@ void TitleBarUserChip::OnAvatarDownloadFinished(QNetworkReply* reply)
     QTimer::singleShot(0, this, [this]() { RelayoutInParent(); });
 }
 
-QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END
-
+QJ_NAMESPACE_FIT_USER_END
 
 

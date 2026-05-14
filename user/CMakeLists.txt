@@ -15,6 +15,7 @@ add_library(user SHARED
 )
 
 target_include_directories(user PUBLIC
+    "${CMAKE_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${QCEF_ROOT}/include"
 )
@@ -29,6 +30,7 @@ target_link_libraries(user PUBLIC
     Qt5::Network
     Qt5::Concurrent
     QCefView
+    SARibbonBar::SARibbonBar
     libhv
 )
 

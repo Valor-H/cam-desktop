@@ -1,4 +1,4 @@
-#include "desktop_frontend_server.h"
+#include "desktop_web_server.h"
 
 #include "user_auth_service.h"
 
@@ -10,23 +10,46 @@
 #include <QMetaObject>
 #include <QThread>
 
-using qianjizn::user::UserAuthService;
+#include <hv/HttpServer.h>
 
-QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
+QJ_NAMESPACE_FIT_USER_BEGIN
 
-DesktopFrontendServer::DesktopFrontendServer(UserAuthService* authService, QObject* parent)
+struct DesktopWebServer::Private
+{
+    hv::HttpService service;
+    hv::HttpServer server;
+};
+
+namespace {
+
+QString normalizeRequestPath(HttpRequest* req)
+{
+    if (!req) {
+        return QStringLiteral("/");
+    }
+    const std::string rawPath = req->Path();
+    if (rawPath.empty()) {
+        return QStringLiteral("/");
+    }
+    return QString::fromStdString(rawPath);
+}
+
+} // namespace
+
+DesktopWebServer::DesktopWebServer(UserAuthService* authService, QObject* parent)
     : QObject(parent)
     , m_authService(authService)
+    , d(new Private)
 {
     ConfigureRoutes();
 }
 
-DesktopFrontendServer::~DesktopFrontendServer()
+DesktopWebServer::~DesktopWebServer()
 {
     Stop();
 }
 
-bool DesktopFrontendServer::Start()
+bool DesktopWebServer::Start()
 {
     if (m_started) {
         return true;
@@ -37,11 +60,11 @@ bool DesktopFrontendServer::Start()
         return false;
     }
 
-    m_server.registerHttpService(&m_service);
-    m_server.setHost("127.0.0.1");
-    m_server.setPort(m_port);
-    m_server.setThreadNum(1);
-    if (m_server.start() != 0) {
+    d->server.registerHttpService(&d->service);
+    d->server.setHost("127.0.0.1");
+    d->server.setPort(m_port);
+    d->server.setThreadNum(1);
+    if (d->server.start() != 0) {
         return false;
     }
 
@@ -49,37 +72,37 @@ bool DesktopFrontendServer::Start()
     return true;
 }
 
-void DesktopFrontendServer::Stop()
+void DesktopWebServer::Stop()
 {
     if (!m_started) {
         return;
     }
 
-    m_server.stop();
+    d->server.stop();
     m_started = false;
 }
 
-QUrl DesktopFrontendServer::BaseUrl() const
+QUrl DesktopWebServer::BaseUrl() const
 {
     return QUrl(QStringLiteral("http://127.0.0.1:%1/").arg(m_port));
 }
 
-void DesktopFrontendServer::ConfigureRoutes()
+void DesktopWebServer::ConfigureRoutes()
 {
-    m_service.AllowCORS();
+    d->service.AllowCORS();
 
-    m_service.GET("/desktop-bootstrap.json", [this](HttpRequest*, HttpResponse* resp) {
+    d->service.GET("/desktop-bootstrap.json", [this](HttpRequest*, HttpResponse* resp) {
         resp->headers["Content-Type"] = "application/json; charset=utf-8";
         resp->body = BuildBootstrapJson().toStdString();
         return 200;
     });
 
-    m_service.Use([this](HttpRequest* req, HttpResponse* resp) {
+    d->service.Use([this](HttpRequest* req, HttpResponse* resp) {
         if (req->method != HTTP_GET && req->method != HTTP_HEAD) {
             return HTTP_STATUS_NEXT;
         }
 
-        const QString path = NormalizeRequestPath(req);
+        const QString path = normalizeRequestPath(req);
         if (path == QStringLiteral("/desktop-bootstrap.json")) {
             return HTTP_STATUS_NEXT;
         }
@@ -94,21 +117,7 @@ void DesktopFrontendServer::ConfigureRoutes()
     });
 }
 
-QString DesktopFrontendServer::NormalizeRequestPath(HttpRequest* req) const
-{
-    if (!req) {
-        return QStringLiteral("/");
-    }
-
-    const std::string rawPath = req->Path();
-    if (rawPath.empty()) {
-        return QStringLiteral("/");
-    }
-
-    return QString::fromStdString(rawPath);
-}
-
-QString DesktopFrontendServer::BuildBootstrapJson() const
+QString DesktopWebServer::BuildBootstrapJson() const
 {
     const BootstrapSnapshot snapshot = CaptureSnapshotSync();
     QJsonObject payload {
@@ -125,7 +134,7 @@ QString DesktopFrontendServer::BuildBootstrapJson() const
     return QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
 }
 
-DesktopFrontendServer::BootstrapSnapshot DesktopFrontendServer::CaptureSnapshot() const
+DesktopWebServer::BootstrapSnapshot DesktopWebServer::CaptureSnapshot() const
 {
     BootstrapSnapshot snapshot;
     if (!m_authService) {
@@ -142,19 +151,19 @@ DesktopFrontendServer::BootstrapSnapshot DesktopFrontendServer::CaptureSnapshot(
     return snapshot;
 }
 
-DesktopFrontendServer::BootstrapSnapshot DesktopFrontendServer::CaptureSnapshotSync() const
+DesktopWebServer::BootstrapSnapshot DesktopWebServer::CaptureSnapshotSync() const
 {
     if (thread() == QThread::currentThread()) {
         return CaptureSnapshot();
     }
 
     BootstrapSnapshot snapshot;
-    QMetaObject::invokeMethod(const_cast<DesktopFrontendServer*>(this), [&]() { snapshot = CaptureSnapshot(); },
+    QMetaObject::invokeMethod(const_cast<DesktopWebServer*>(this), [&]() { snapshot = CaptureSnapshot(); },
                               Qt::BlockingQueuedConnection);
     return snapshot;
 }
 
-QString DesktopFrontendServer::ResolveStaticFilePath(const QString& requestPath) const
+QString DesktopWebServer::ResolveStaticFilePath(const QString& requestPath) const
 {
     const QString rootPath = WebRootPath();
     const QString relative = requestPath == QStringLiteral("/") ? QStringLiteral("index.html") : requestPath.mid(1);
@@ -179,10 +188,9 @@ QString DesktopFrontendServer::ResolveStaticFilePath(const QString& requestPath)
     return absolutePath;
 }
 
-QString DesktopFrontendServer::WebRootPath() const
+QString DesktopWebServer::WebRootPath() const
 {
     return QStringLiteral("D:/Codes/cloud-cam-front/dist");
 }
 
-QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END
-
+QJ_NAMESPACE_FIT_USER_END

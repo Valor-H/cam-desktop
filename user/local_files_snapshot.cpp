@@ -1,6 +1,6 @@
 #include "local_files_snapshot.h"
 
-#include "cam_options.h"
+#include <project_management/cam_options.h>
 
 #include <QDir>
 #include <QFileInfo>

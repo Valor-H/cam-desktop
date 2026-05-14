@@ -2,8 +2,6 @@
 
 #include <QDialog>
 #include <QString>
-#include <QVariant>
-#include <QVariantList>
 #include <QVariantMap>
 #include <QUrl>
 

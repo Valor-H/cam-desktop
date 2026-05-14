@@ -1,19 +1,30 @@
 #include "file_manager_view.h"
 
 #include "auth_http_client.h"
+#include "local_files_snapshot.h"
+#include "user_auth_service.h"
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFutureWatcher>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QEvent>
+#include <QLayout>
 #include <QPalette>
 #include <QPointer>
 #include <QRegularExpression>
+#include <QResizeEvent>
+#include <QShowEvent>
 #include <QSizePolicy>
+#include <QTimer>
+#include <QUrlQuery>
 #include <QVariantMap>
 #include <QVariantList>
 #include <QVBoxLayout>
+#include <QWindow>
 #include <QtMath>
 
 #include <QtConcurrent/QtConcurrentRun>
@@ -35,6 +46,7 @@ const QString kMethodRequestLogin = QStringLiteral("Desktop.RequestLogin");
 const QString kMethodRequestOpenRecentFile = QStringLiteral("Desktop.RequestOpenRecentFile");
 const QString kMethodRequestOpen = QStringLiteral("Desktop.RequestOpen");
 const QString kMethodRequestNewProject = QStringLiteral("Desktop.RequestNewProject");
+const QString kEventDesktopOnResume = QStringLiteral("Desktop.OnResume");
 
 #ifndef CAMDEMO_RECENT_FILE_CACHE_DIR
 #define CAMDEMO_RECENT_FILE_CACHE_DIR "D:/cachePath/"
@@ -47,6 +59,16 @@ QString apiBaseStringForClient(const QUrl& url)
         baseUrl.chop(1);
     }
     return baseUrl;
+}
+
+QUrl ensureDesktopSource(const QUrl& input)
+{
+    QUrl url = input;
+    QUrlQuery query(url);
+    query.removeAllQueryItems(QStringLiteral("source"));
+    query.addQueryItem(QStringLiteral("source"), QStringLiteral("desktop"));
+    url.setQuery(query);
+    return url;
 }
 
 QString sanitizeFileSegment(QString value)
@@ -72,7 +94,7 @@ double zoomFactorToLevel(double factor)
 
 FileManagerView::FileManagerView(QWidget* parent, qianjizn::user::UserAuthService* authService, const QUrl& pageUrl)
     : QWidget(parent)
-    , m_pageUrl(pageUrl)
+    , m_pageUrl(ensureDesktopSource(pageUrl))
     , m_authService(authService)
 {
     setObjectName(QStringLiteral("embeddedFileManagerOverlay"));
@@ -90,10 +112,15 @@ FileManagerView::FileManagerView(QWidget* parent, qianjizn::user::UserAuthServic
     QCefSetting setting;
     setting.setBackgroundColor(QColor(Qt::white));
 
-    m_view = new QCefView(pageUrl.toString(), &setting, this);
+    m_view = new QCefView(m_pageUrl.toString(), &setting, this);
     m_view->setAutoFillBackground(true);
     m_view->setPalette(palette());
     layout->addWidget(m_view);
+
+    connect(m_view, &QCefView::nativeBrowserCreated, this, [this](QWindow* window) {
+        m_nativeBrowserWindow = window;
+        ScheduleNativeBrowserWindowSync();
+    });
 
     m_snapshotWatcher = new QFutureWatcher<LocalFilesSnapshot::Result>(this);
 
@@ -106,6 +133,10 @@ FileManagerView::FileManagerView(QWidget* parent, qianjizn::user::UserAuthServic
                 }
             });
     connect(m_view,
+            &QCefView::addressChanged,
+            this,
+            [this](const QCefFrameId&, const QString& url) { m_pageUrl = ensureDesktopSource(QUrl(url)); });
+    connect(m_view,
             &QCefView::cefQueryRequest,
             this,
             [this](const QCefBrowserId&, const QCefFrameId&, const QCefQuery& query) { OnCefQueryRequest(query); });
@@ -115,23 +146,91 @@ FileManagerView::FileManagerView(QWidget* parent, qianjizn::user::UserAuthServic
     if (m_authService && m_authService->Session()) {
         connect(m_authService->Session(), &qianjizn::user::UserSession::AuthStateChanged, this, [this](bool) {
             SyncAuthStateToWeb();
-        });
-        connect(m_authService->Session(), &qianjizn::user::UserSession::UserProfileChanged, this, [this]() {
-            SyncAuthStateToWeb();
+            if (isVisible()) {
+                RefreshCurrentPage();
+            }
         });
     }
 }
 
 FileManagerView::~FileManagerView() = default;
 
-void FileManagerView::NavigateTo(const QUrl& pageUrl)
+void FileManagerView::RefreshCurrentPage()
 {
-    m_pageUrl = pageUrl;
     if (!m_view) {
         return;
     }
 
-    m_view->navigateToUrl(m_pageUrl.toString());
+    const QJsonObject payload {
+        { QStringLiteral("reason"), QStringLiteral("resume") },
+        { QStringLiteral("ts"), QString::number(QDateTime::currentMSecsSinceEpoch()) },
+    };
+    const QString json = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
+    QCefEvent event(kEventDesktopOnResume);
+    event.setArguments(QVariantList { json });
+    m_view->triggerEvent(event, QCefView::MainFrameID);
+}
+
+void FileManagerView::SyncViewportGeometryNow()
+{
+    if (!m_view) {
+        return;
+    }
+
+    if (QLayout* rootLayout = layout()) {
+        rootLayout->setGeometry(rect());
+        rootLayout->activate();
+    }
+
+    m_view->setGeometry(rect());
+    m_view->resize(size());
+    m_view->updateGeometry();
+    SyncNativeBrowserWindowNow();
+}
+
+bool FileManagerView::event(QEvent* event)
+{
+    if (event && (event->type() == QEvent::ShowToParent || event->type() == QEvent::LayoutRequest)) {
+        ScheduleNativeBrowserWindowSync();
+    }
+
+    return QWidget::event(event);
+}
+
+void FileManagerView::showEvent(QShowEvent* event)
+{
+    QWidget::showEvent(event);
+    ScheduleNativeBrowserWindowSync();
+}
+
+void FileManagerView::resizeEvent(QResizeEvent* event)
+{
+    QWidget::resizeEvent(event);
+    ScheduleNativeBrowserWindowSync();
+}
+
+void FileManagerView::SyncNativeBrowserWindowNow()
+{
+    if (!m_view || !m_nativeBrowserWindow) {
+        return;
+    }
+
+    m_nativeBrowserWindow->setVisible(isVisible() && m_view->isVisible());
+    m_nativeBrowserWindow->setPosition(0, 0);
+    m_nativeBrowserWindow->resize(m_view->size());
+}
+
+void FileManagerView::ScheduleNativeBrowserWindowSync()
+{
+    if (m_nativeBrowserSyncPending) {
+        return;
+    }
+
+    m_nativeBrowserSyncPending = true;
+    QTimer::singleShot(0, this, [this]() {
+        m_nativeBrowserSyncPending = false;
+        SyncViewportGeometryNow();
+    });
 }
 
 void FileManagerView::ApplyEmbeddedScale()
@@ -314,7 +413,6 @@ void FileManagerView::PushLocalFilesSnapshot(const LocalFilesSnapshot::Result& r
         m_view->responseQCefQuery(query);
         return;
     }
-
 }
 
 void FileManagerView::HandleOpenRecentFileRequest(const QVariantMap& payload, const QCefQuery* query)

@@ -1,22 +1,22 @@
 # ultramill: workstation shell library
-# Contains NApplication, NMainWindow, TitleBarUserChip, DesktopFrontendServer, QCefRuntime, MockMainWorkspace
+# Contains NApplication, NMainWindow, TitleBarUserChip, DesktopWebServer, QCefRuntime
+
+file(GLOB ULTRAMILL_HEADERS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.h"
+)
+
+file(GLOB ULTRAMILL_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
+)
 
 add_library(ultramill STATIC
-    napplication.h
-    napplication.cpp
-    nmainwindow.h
-    nmainwindow.cpp
-    title_bar_user_chip.h
-    title_bar_user_chip.cpp
-    desktop_frontend_server.h
-    desktop_frontend_server.cpp
-    q_cef_runtime.h
-    q_cef_runtime.cpp
-    mock_main_workspace.h
+    ${ULTRAMILL_HEADERS}
+    ${ULTRAMILL_SOURCES}
     ultramill.qrc
 )
 
 target_include_directories(ultramill PUBLIC
+    "${CMAKE_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 

@@ -1,20 +1,25 @@
 #include "nmainwindow.h"
 
-#include "desktop_frontend_server.h"
-#include "desktop_web.h"
-#include "file_manager_view.h"
-#include "mock_main_workspace.h"
-#include "SARibbonBar.h"
-#include "SARibbonCategory.h"
-#include "SARibbonPanel.h"
-#include "SARibbonQuickAccessBar.h"
-#include "SARibbonSystemButtonBar.h"
-#include "title_bar_user_chip.h"
+#include <user/desktop_web_server.h>
+#include <user/desktop_web.h>
+#include <user/file_manager_view.h>
+#include <SARibbonBar/SARibbonBar.h>
+#include <SARibbonBar/SARibbonCategory.h>
+#include <SARibbonBar/SARibbonPanel.h>
+#include <SARibbonBar/SARibbonQuickAccessBar.h>
+#include <SARibbonBar/SARibbonSystemButtonBar.h>
+#include <SARibbonBar/SARibbonTabBar.h>
+#include <SARibbonBar/SARibbonTitleIconWidget.h>
+#include <user/title_bar_user_chip.h>
 
 #include <QAbstractButton>
 #include <QAction>
+#include <QColor>
+#include <QDebug>
 #include <QDesktopServices>
 #include <QEvent>
+#include <QFrame>
+#include <QHBoxLayout>
 #include <QIcon>
 #include <QMenu>
 #include <QMessageBox>
@@ -22,13 +27,19 @@
 #include <QStatusBar>
 #include <QStyle>
 #include <QTimer>
+#include <QVBoxLayout>
 #include <QWidget>
 
 #include <QCefContext.h>
+#include <QCefView.h>
 
 using qianjizn::user::UserSession;
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
+
+namespace
+{
+}
 
 NMainWindow::NMainWindow(QWidget* parent)
     : SARibbonMainWindow(parent)
@@ -43,29 +54,29 @@ NMainWindow::NMainWindow(QWidget* parent)
     connect(_actionOpen, &QAction::triggered, this, &NMainWindow::OnOpen);
     connect(_actionNew, &QAction::triggered, this, &NMainWindow::OnNewProject);
 
-    _desktopFrontendServer = new DesktopFrontendServer(&_userAuth, this);
+    _desktopWebServer = new qianjizn::user::DesktopWebServer(&_userAuth, this);
     InitializeMainWindowShell();
 }
 
 NMainWindow::~NMainWindow() = default;
 
-bool NMainWindow::EnsureDesktopFrontendServerReady(bool showWarning)
+bool NMainWindow::EnsureDesktopWebServerReady(bool showWarning)
 {
-    if (!_desktopFrontendServer) {
+    if (!_desktopWebServer) {
         if (showWarning) {
             QMessageBox::warning(this, tr("Warning"), tr("Local embedded web server is unavailable."));
         }
         return false;
     }
 
-    if (!_desktopFrontendServer->Start()) {
+    if (!_desktopWebServer->Start()) {
         if (showWarning) {
             QMessageBox::warning(this, tr("Warning"), tr("Local embedded web server failed to start."));
         }
         return false;
     }
 
-    _userAuth.SetFrontendBaseUrl(_desktopFrontendServer->BaseUrl());
+    _userAuth.SetFrontendBaseUrl(_desktopWebServer->BaseUrl());
     return true;
 }
 
@@ -93,9 +104,13 @@ void NMainWindow::InitializeMainWindowShell()
     InitRibbonBar();
     InitUserChip();
     InitCentralWorkspace();
-    EnsureDesktopFrontendServerReady();
+    EnsureDesktopWebServerReady();
     RefreshUserChipFromSession();
     _userAuth.InitFromStoredToken();
+
+    const QUrl pageUrl = qianjizn::user::buildRecentFilesUrl(_userAuth.FrontendBaseUrl());
+    ShowFileManagerWorkspace(pageUrl);
+    ShowHomeWorkspace();
 }
 
 void NMainWindow::InitCentralWorkspace()
@@ -104,7 +119,46 @@ void NMainWindow::InitCentralWorkspace()
         return;
     }
 
-    _homeWorkspace = new MockMainWorkspace(this);
+    _homeWorkspace = new QWidget(this);
+    _homeWorkspace->setObjectName(QStringLiteral("mockMainWorkspace"));
+
+    auto* rootLayout = new QHBoxLayout(_homeWorkspace);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setSpacing(0);
+
+    auto* leftSidebar = new QFrame(_homeWorkspace);
+    leftSidebar->setObjectName(QStringLiteral("mockSidebar"));
+    leftSidebar->setMinimumWidth(280);
+    leftSidebar->setMaximumWidth(320);
+    leftSidebar->setStyleSheet(QStringLiteral(
+        "#mockSidebar {"
+        "background: #f5f6f8;"
+        "border-right: 1px solid #d7dce3;"
+        "}"));
+
+    auto* leftLayout = new QVBoxLayout(leftSidebar);
+    leftLayout->setContentsMargins(0, 0, 0, 0);
+    leftLayout->setSpacing(0);
+
+    auto* leftHeader = new QFrame(leftSidebar);
+    leftHeader->setFixedHeight(42);
+    leftHeader->setStyleSheet(QStringLiteral("background: #ffffff; border-bottom: 1px solid #d7dce3;"));
+    leftLayout->addWidget(leftHeader);
+
+    auto* leftBody = new QFrame(leftSidebar);
+    leftBody->setStyleSheet(QStringLiteral("background: #fafbfc;"));
+    leftLayout->addWidget(leftBody, 1);
+
+    auto* rightViewport = new QFrame(_homeWorkspace);
+    rightViewport->setObjectName(QStringLiteral("mockViewport"));
+    rightViewport->setStyleSheet(QStringLiteral(
+        "#mockViewport {"
+        "background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #c6d0da, stop:1 #eef2f6);"
+        "}"));
+
+    rootLayout->addWidget(leftSidebar);
+    rootLayout->addWidget(rightViewport, 1);
+
     setCentralWidget(_homeWorkspace);
 }
 
@@ -127,11 +181,23 @@ void NMainWindow::InitRibbonBar()
     }
 
     ribbonBarWidget->setRibbonStyle(SARibbonBar::RibbonStyleLooseThreeRow);
+    ribbonBarWidget->setApplicationButton(nullptr);
+    ribbonBarWidget->setWindowTitleBackgroundBrush(QColor(QStringLiteral("#f0f0f0")));
+    if (SARibbonTabBar* tabBar = ribbonBarWidget->ribbonTabBar()) {
+        tabBar->setStyleSheet(QStringLiteral("background-color: #f0f0f0;"));
+    }
 
     if (SARibbonQuickAccessBar* quickAccessBar = ribbonBarWidget->quickAccessBar()) {
+        quickAccessBar->setStyleSheet(QStringLiteral("QToolBar { background-color: #f0f0f0; border: none; }"));
         quickAccessBar->addAction(_actionDocument);
         quickAccessBar->addAction(_actionNew);
         quickAccessBar->addAction(_actionOpen);
+    }
+    if (SARibbonTitleIconWidget* iconWidget = ribbonBarWidget->titleIconWidget()) {
+        iconWidget->setStyleSheet(QStringLiteral("background-color: #f0f0f0;"));
+    }
+    if (SARibbonSystemButtonBar* buttonBar = windowButtonBar()) {
+        buttonBar->setStyleSheet(QStringLiteral("SARibbonSystemButtonBar { background-color: #f0f0f0; }"));
     }
 
     const auto makeAction = [this](const QString& text, QStyle::StandardPixmap iconType) {
@@ -195,7 +261,7 @@ void NMainWindow::InitUserChip()
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     bar->addWidget(spacer);
 
-    _userChip = new TitleBarUserChip(bar, _userAuth.ApiBaseUrl());
+    _userChip = new qianjizn::user::TitleBarUserChip(bar, _userAuth.ApiBaseUrl());
     bar->addWidget(_userChip);
 
     QTimer::singleShot(0, this, [this]() { SyncUserChipIntoTitleBar(); });
@@ -209,8 +275,9 @@ void NMainWindow::InitUserChip()
     connect(_personalCenterAction, &QAction::triggered, this, &NMainWindow::OnOpenPersonalProfile, Qt::UniqueConnection);
     connect(_teamAction, &QAction::triggered, this, &NMainWindow::OnOpenTeam, Qt::UniqueConnection);
 
-    connect(_userChip, &TitleBarUserChip::loginRequested, this, &NMainWindow::OnShowAccountAuthDialog);
-    connect(_userChip, &TitleBarUserChip::accountMenuRequested, this, &NMainWindow::OnShowAccountMenu);
+    connect(_userChip, &qianjizn::user::TitleBarUserChip::loginRequested, this, &NMainWindow::OnShowAccountAuthDialog);
+    connect(
+        _userChip, &qianjizn::user::TitleBarUserChip::accountMenuRequested, this, &NMainWindow::OnShowAccountMenu);
 }
 
 void NMainWindow::SyncUserChipIntoTitleBar()
@@ -232,7 +299,7 @@ void NMainWindow::SyncUserChipIntoTitleBar()
         }
     }
 
-    const int minH = TitleBarUserChip::kAvatarButtonSide;
+    const int minH = qianjizn::user::TitleBarUserChip::kAvatarButtonSide;
     const int h = rowH > 0 ? qMax(rowH, minH) : minH;
     _userChip->setFixedHeight(h);
     _userChip->RelayoutInParent();
@@ -259,23 +326,12 @@ void NMainWindow::UpdateFileManagerOverlayGeometry()
 
 void NMainWindow::OnShowAccountAuthDialog()
 {
-    constexpr int kMaxRetries = 40;
-    constexpr int kRetryMs = 50;
-
     if (!QCefContext::instance()) {
-        if (_cefAuthRetryCount >= kMaxRetries) {
-            _cefAuthRetryCount = 0;
-            QMessageBox::warning(this, tr("Warning"), tr("Browser runtime is not ready yet. Please try again."));
-            return;
-        }
-
-        ++_cefAuthRetryCount;
-        QTimer::singleShot(kRetryMs, this, &NMainWindow::OnShowAccountAuthDialog);
+        QMessageBox::warning(this, tr("Warning"), tr("Browser runtime is not ready yet. Please try again."));
         return;
     }
 
-    _cefAuthRetryCount = 0;
-    if (!EnsureDesktopFrontendServerReady()) {
+    if (!EnsureDesktopWebServerReady()) {
         return;
     }
     _userAuth.ShowAccountAuthDialog(this);
@@ -313,7 +369,7 @@ void NMainWindow::OnOpenPersonalProfile()
 
 void NMainWindow::OnOpenFileManager()
 {
-    if (!EnsureDesktopFrontendServerReady()) {
+    if (!EnsureDesktopWebServerReady()) {
         return;
     }
 
@@ -345,14 +401,15 @@ void NMainWindow::ShowFileManagerWorkspace(const QUrl& pageUrl)
         });
         connect(_fileManagerView, &FileManagerView::OpenRequested, this, &NMainWindow::OnOpen);
         connect(_fileManagerView, &FileManagerView::NewProjectRequested, this, &NMainWindow::NewProject);
-        _fileManagerView->hide();
     } else {
-        _fileManagerView->NavigateTo(pageUrl);
+        _fileManagerView->RefreshCurrentPage();
     }
 
     UpdateFileManagerOverlayGeometry();
+    _fileManagerView->SyncViewportGeometryNow();
     _fileManagerView->show();
     _fileManagerView->raise();
+    _fileManagerView->SyncViewportGeometryNow();
 }
 
 void NMainWindow::OnShowDocumentOverlay()

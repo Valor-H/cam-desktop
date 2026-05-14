@@ -1,5 +1,5 @@
 #include "napplication.h"
-#include "q_cef_runtime.h"
+#include <user/q_cef_runtime.h>
 
 // Q_INIT_RESOURCE cannot be called inside a namespace; use a file-scope helper.
 static void initUltramillResources()
@@ -23,7 +23,7 @@ void NApplication::Initialize()
 
 void NApplication::InitCefRuntime()
 {
-    QCefRuntime::Instance().Initialize();
+    qianjizn::user::QCefRuntime::Instance().Initialize();
 }
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END

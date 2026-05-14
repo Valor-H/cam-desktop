@@ -8,7 +8,7 @@
 
 #include <QCefContext.h>
 
-QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
+QJ_NAMESPACE_FIT_USER_BEGIN
 
 QCefRuntime& QCefRuntime::Instance()
 {
@@ -49,4 +49,4 @@ void QCefRuntime::InitConfig()
         QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + QStringLiteral("/CamDemo/cef"));
 }
 
-QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END
+QJ_NAMESPACE_FIT_USER_END

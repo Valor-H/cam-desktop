@@ -1,5 +1,5 @@
-﻿#include "nmainwindow.h"
-#include "napplication.h"
+#include <ultramill/nmainwindow.h>
+#include <ultramill/napplication.h>
 #include <QIcon>
 #include <QtWidgets/QApplication>
 

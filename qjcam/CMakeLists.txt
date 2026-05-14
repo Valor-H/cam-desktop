@@ -8,6 +8,10 @@ add_executable(qjcam WIN32
     qjcam.qrc
 )
 
+target_include_directories(qjcam PRIVATE
+    "${CMAKE_SOURCE_DIR}"
+)
+
 target_link_libraries(qjcam PRIVATE
     ultramill
 )
