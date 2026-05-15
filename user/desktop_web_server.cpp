@@ -15,22 +15,6 @@ struct DesktopWebServer::Private
     hv::HttpServer server;
 };
 
-namespace {
-
-QString normalizeRequestPath(HttpRequest* req)
-{
-    if (!req) {
-        return QStringLiteral("/");
-    }
-    const std::string rawPath = req->Path();
-    if (rawPath.empty()) {
-        return QStringLiteral("/");
-    }
-    return QString::fromStdString(rawPath);
-}
-
-} // namespace
-
 DesktopWebServer::DesktopWebServer(UserAuthService* authService, QObject* parent)
     : QObject(parent)
     , m_authService(authService)
@@ -91,7 +75,8 @@ void DesktopWebServer::ConfigureRoutes()
             return HTTP_STATUS_NEXT;
         }
 
-        const QString path = normalizeRequestPath(req);
+        const QString path =
+            (!req || req->Path().empty()) ? QStringLiteral("/") : QString::fromStdString(req->Path());
         const QString filePath = ResolveStaticFilePath(path);
         if (!filePath.isEmpty()) {
             return resp->File(filePath.toStdString().c_str());
