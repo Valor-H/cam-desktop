@@ -19,8 +19,8 @@ target_link_libraries(qjcam PRIVATE
 # Copy runtime files
 add_custom_command(TARGET qjcam POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory "${QCEF_ROOT}/$<CONFIG>/bin" "$<TARGET_FILE_DIR:qjcam>"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LIBHV_ROOT}/bin/hv.dll" "$<TARGET_FILE_DIR:qjcam>"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${SARIBBON_DLL}" "$<TARGET_FILE_DIR:qjcam>"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<$<CONFIG:Debug>:${LIBHV_DEBUG_ROOT}/bin/hv.dll>$<$<NOT:$<CONFIG:Debug>>:${LIBHV_RELEASE_ROOT}/bin/hv.dll>" "$<TARGET_FILE_DIR:qjcam>"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<$<CONFIG:Debug>:${SARIBBON_DLL_DEBUG}>$<$<NOT:$<CONFIG:Debug>>:${SARIBBON_DLL_RELEASE}>" "$<TARGET_FILE_DIR:qjcam>"
 )
 
 set_target_properties(qjcam PROPERTIES

@@ -2,12 +2,14 @@
 
 #include "cloud_server_global.h"
 
+#include <QByteArray>
 #include <QUrl>
 #include <QWidget>
 
-class SARibbonToolButton;
-class QNetworkAccessManager;
-class QNetworkReply;
+#include <atomic>
+#include <memory>
+
+class QToolButton;
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 class UserSession;
@@ -34,13 +36,23 @@ signals:
     /** 请求显示账号菜单。 */
     void accountMenuRequested();
 
-private slots:
-    /** 处理头像下载完成事件。 */
-    void OnAvatarDownloadFinished(QNetworkReply* reply);
-
 private:
+    /** 刷新头像按钮可视状态。 */
+    void RefreshAvatarVisuals();
+    /** 应用头像图标并刷新显示。 */
+    void ApplyAvatarIcon(const QPixmap& pixmap);
+    /** 应用昵称首字母兜底头像。 */
+    void ApplyFallbackAvatar();
     /** 中止当前头像下载请求。 */
     void AbortAvatarRequest();
+    /** 发起头像下载请求。 */
+    void StartAvatarDownload(const QUrl& url);
+    /** 处理头像下载结果。 */
+    void ApplyAvatarDownloadResult(bool networkOk,
+                                   int httpStatus,
+                                   const QString& requestUrl,
+                                   const QString& errorMessage,
+                                   const QByteArray& body);
     /** 应用默认头像显示。 */
     void ApplyDefaultAvatar();
     /** 应用已登录状态外观。 */
@@ -58,11 +70,9 @@ private:
     /** 保存接口基础地址。 */
     QUrl _apiBaseUrl;
     /** 保存头像按钮实例。 */
-    SARibbonToolButton* _avatarButton { nullptr };
-    /** 保存网络访问管理器。 */
-    QNetworkAccessManager* _nam { nullptr };
-    /** 保存当前头像下载回复对象。 */
-    QNetworkReply* _avatarReply { nullptr };
+    QToolButton* _avatarButton { nullptr };
+    /** 保存头像下载取消代次。 */
+    std::shared_ptr<std::atomic<quint64>> _avatarRequestEpoch;
     /** 标识当前是否处于登录状态。 */
     bool _loggedIn { false };
     /** 保存兜底昵称。 */

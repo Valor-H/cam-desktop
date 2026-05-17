@@ -1,44 +1,77 @@
 #include "title_bar_user_chip.h"
 #include "user_session.h"
-#include <SARibbonBar/SARibbonToolButton.h>
 
+#include <QCoreApplication>
 #include <QHBoxLayout>
+#include <QDebug>
 #include <QLayout>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QNetworkRequest>
 #include <QPainter>
 #include <QPainterPath>
 #include <QPixmap>
+#include <QPointer>
 #include <QSizePolicy>
 #include <QTimer>
 #include <QToolButton>
 #include <QUrl>
-#include <QSslSocket>
+
+#include <hv/hssl.h>
+#include <hv/requests.h>
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 
 namespace
 {
 constexpr char kNeutralAvatarRes[] = ":/ultramill/resource/avatar.png";
+constexpr int kAvatarDownloadTimeoutSec = 15;
+
+struct AvatarDownloadOutcome
+{
+    bool networkOk { false };
+    int httpStatus { 0 };
+    QString requestUrl;
+    QString errorMessage;
+    QByteArray body;
+};
+
+QString BuildLibhvFailureMessage()
+{
+    const char* backend = hssl_backend();
+    const QString backendName = backend ? QString::fromUtf8(backend).trimmed() : QString();
+    if (backendName.isEmpty()) {
+        return QStringLiteral("libhv request failed");
+    }
+    return QStringLiteral("libhv request failed (ssl backend: %1)").arg(backendName);
+}
 
 QString AvatarRibbonToolButtonStyleSheet()
 {
     return QStringLiteral(
-        "SARibbonToolButton#CamTitleBarUserAvatar,"
-        "SARibbonToolButton#CamTitleBarUserAvatar:hover,"
-        "SARibbonToolButton#CamTitleBarUserAvatar:pressed {"
+        "QToolButton#CamTitleBarUserAvatar,"
+        "QToolButton#CamTitleBarUserAvatar:hover,"
+        "QToolButton#CamTitleBarUserAvatar:pressed {"
         "  background-color: transparent;"
         "  border: none;"
         "  border-radius: 999px;"
         "  padding: 0;""}");
 }
+
+AvatarDownloadOutcome BuildAvatarDownloadOutcome(const QString& requestUrl, const HttpResponsePtr& resp)
+{
+    AvatarDownloadOutcome outcome;
+    outcome.networkOk = resp != nullptr;
+    outcome.httpStatus = resp ? resp->status_code : 0;
+    outcome.requestUrl = requestUrl;
+    outcome.errorMessage = resp ? QString() : BuildLibhvFailureMessage();
+    outcome.body = resp ? QByteArray::fromStdString(resp->body) : QByteArray();
+    return outcome;
+}
+
 }
 
 TitleBarUserChip::TitleBarUserChip(QWidget* parent, const QUrl& apiBaseUrl)
     : QWidget(parent)
     , _apiBaseUrl(apiBaseUrl)
-    , _nam(new QNetworkAccessManager(this))
+    , _avatarRequestEpoch(std::make_shared<std::atomic<quint64>>(0))
 {
     setCursor(Qt::PointingHandCursor);
     setMinimumHeight(TitleBarUserChip::kAvatarButtonSide);
@@ -46,12 +79,11 @@ TitleBarUserChip::TitleBarUserChip(QWidget* parent, const QUrl& apiBaseUrl)
     setAttribute(Qt::WA_TranslucentBackground, true);
     setStyleSheet(QStringLiteral("TitleBarUserChip { background: transparent; }"));
 
-    _avatarButton = new SARibbonToolButton(this);
+    _avatarButton = new QToolButton(this);
     _avatarButton->setObjectName(QStringLiteral("CamTitleBarUserAvatar"));
     _avatarButton->setAttribute(Qt::WA_StyledBackground, true);
     _avatarButton->setStyleSheet(AvatarRibbonToolButtonStyleSheet());
     _avatarButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    _avatarButton->setSmallIconSize(QSize(TitleBarUserChip::kAvatarIconSide, TitleBarUserChip::kAvatarIconSide));
     _avatarButton->setIconSize(QSize(TitleBarUserChip::kAvatarIconSide, TitleBarUserChip::kAvatarIconSide));
     _avatarButton->setFixedSize(QSize(TitleBarUserChip::kAvatarButtonSide, TitleBarUserChip::kAvatarButtonSide));
     _avatarButton->setFocusPolicy(Qt::NoFocus);
@@ -69,8 +101,6 @@ TitleBarUserChip::TitleBarUserChip(QWidget* parent, const QUrl& apiBaseUrl)
     lay->setSpacing(0);
     lay->setAlignment(Qt::AlignVCenter);
     lay->addWidget(_avatarButton);
-
-    connect(_nam, &QNetworkAccessManager::finished, this, &TitleBarUserChip::OnAvatarDownloadFinished);
 }
 
 void TitleBarUserChip::RelayoutInParent()
@@ -85,6 +115,38 @@ void TitleBarUserChip::RelayoutInParent()
         }
         w->updateGeometry();
     }
+}
+
+void TitleBarUserChip::RefreshAvatarVisuals()
+{
+    if (!_avatarButton) {
+        return;
+    }
+
+    _avatarButton->updateGeometry();
+    _avatarButton->update();
+    update();
+    RelayoutInParent();
+
+    QTimer::singleShot(0, this, [this]() {
+        if (!_avatarButton) {
+            return;
+        }
+        _avatarButton->update();
+        update();
+        RelayoutInParent();
+    });
+}
+
+void TitleBarUserChip::ApplyAvatarIcon(const QPixmap& pixmap)
+{
+    _avatarButton->setIcon(QIcon(pixmap));
+    RefreshAvatarVisuals();
+}
+
+void TitleBarUserChip::ApplyFallbackAvatar()
+{
+    ApplyAvatarIcon(MakeInitialAvatarWithRing(_fallbackNickName, _fallbackUserName));
 }
 
 void TitleBarUserChip::SyncFromSession(const UserSession* session)
@@ -103,7 +165,7 @@ void TitleBarUserChip::ApplyDefaultAvatar()
     _fallbackNickName.clear();
     _fallbackUserName.clear();
     const QPixmap ph = LoadAvatarRaster(kNeutralAvatarRes, TitleBarUserChip::kAvatarIconSide * 2);
-    _avatarButton->setIcon(QIcon(MakeCircularAvatar(ph)));
+    ApplyAvatarIcon(MakeCircularAvatar(ph));
     _avatarButton->setToolTip(tr("Not logged in"));
 }
 
@@ -124,18 +186,18 @@ void TitleBarUserChip::ApplyLoggedInAppearance(const UserSession* session)
 
     const QString raw = u.value(QStringLiteral("avatar")).toString().trimmed();
     if (raw.isEmpty()) {
-        _avatarButton->setIcon(QIcon(MakeInitialAvatarWithRing(_fallbackNickName, _fallbackUserName)));
+        ApplyFallbackAvatar();
         return;
     }
 
     const QUrl url = ResolveAvatarUrl(raw);
     if (!url.isValid()) {
-        _avatarButton->setIcon(QIcon(MakeInitialAvatarWithRing(_fallbackNickName, _fallbackUserName)));
+        ApplyFallbackAvatar();
         return;
     }
 
-    _avatarButton->setIcon(QIcon(loggedInPlaceholder));
-    _avatarReply = _nam->get(QNetworkRequest(url));
+    ApplyAvatarIcon(loggedInPlaceholder);
+    StartAvatarDownload(url);
 }
 
 QUrl TitleBarUserChip::ResolveAvatarUrl(const QString& raw) const
@@ -143,16 +205,13 @@ QUrl TitleBarUserChip::ResolveAvatarUrl(const QString& raw) const
     if (raw.isEmpty()) {
         return {};
     }
-    QUrl u = QUrl::fromUserInput(raw);
+    QUrl u = QUrl::fromEncoded(raw.toUtf8());
+    if (!u.isValid()) {
+        u = QUrl(raw, QUrl::StrictMode);
+    }
     if (u.isRelative()) {
         return _apiBaseUrl.resolved(u);
     }
-
-    if (u.scheme().compare(QStringLiteral("https"), Qt::CaseInsensitive) == 0
-        && !QSslSocket::supportsSsl()) {
-        u.setScheme(QStringLiteral("http"));
-    }
-
     return u;
 }
 
@@ -227,38 +286,73 @@ QPixmap TitleBarUserChip::MakeCircularAvatar(const QPixmap& source) const
 
 void TitleBarUserChip::AbortAvatarRequest()
 {
-    if (_avatarReply) {
-        disconnect(_avatarReply, nullptr, this, nullptr);
-        _avatarReply->abort();
-        _avatarReply->deleteLater();
-        _avatarReply = nullptr;
-    }
+    _avatarRequestEpoch->fetch_add(1, std::memory_order_relaxed);
 }
 
-void TitleBarUserChip::OnAvatarDownloadFinished(QNetworkReply* reply)
+void TitleBarUserChip::StartAvatarDownload(const QUrl& url)
 {
-    if (!reply) {
-        return;
-    }
-    if (reply != _avatarReply) {
-        reply->deleteLater();
-        return;
-    }
-    _avatarReply = nullptr;
+    const quint64 requestId = _avatarRequestEpoch->load(std::memory_order_relaxed);
+    auto epochRef = _avatarRequestEpoch;
+    QPointer<TitleBarUserChip> self(this);
 
+    const QString requestUrl = url.toString(QUrl::FullyEncoded);
+    auto req = std::make_shared<HttpRequest>();
+    req->method = HTTP_GET;
+    req->url = requestUrl.toStdString();
+    req->timeout = kAvatarDownloadTimeoutSec;
+
+    requests::async(req, [epochRef, requestId, self, requestUrl](const HttpResponsePtr& resp) {
+        QMetaObject::invokeMethod(
+            QCoreApplication::instance(),
+            [epochRef, requestId, self, outcome = BuildAvatarDownloadOutcome(requestUrl, resp)]() {
+                if (!self) {
+                    return;
+                }
+                if (epochRef->load(std::memory_order_relaxed) != requestId) {
+                    return;
+                }
+
+                self->ApplyAvatarDownloadResult(outcome.networkOk,
+                                                outcome.httpStatus,
+                                                outcome.requestUrl,
+                                                outcome.errorMessage,
+                                                outcome.body);
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+void TitleBarUserChip::ApplyAvatarDownloadResult(bool networkOk,
+                                                 int httpStatus,
+                                                 const QString& requestUrl,
+                                                 const QString& errorMessage,
+                                                 const QByteArray& body)
+{
     QPixmap loaded;
-    if (reply->error() == QNetworkReply::NoError) {
-        loaded.loadFromData(reply->readAll());
+
+    if (networkOk && httpStatus >= 200 && httpStatus < 300) {
+        loaded.loadFromData(body);
+    } else {
+        qWarning().noquote()
+            << QStringLiteral("[TitleBarUserChip] avatar download failed: status=%1, url=%2, message=%3")
+                   .arg(httpStatus)
+                   .arg(requestUrl, errorMessage.isEmpty() ? QStringLiteral("http request failed") : errorMessage);
     }
-    reply->deleteLater();
+
+    if (networkOk && httpStatus >= 200 && httpStatus < 300 && loaded.isNull()) {
+        qWarning().noquote()
+            << QStringLiteral("[TitleBarUserChip] avatar payload is not a valid image: status=%1, url=%2, bytes=%3")
+                   .arg(httpStatus)
+                   .arg(requestUrl)
+                   .arg(body.size());
+    }
 
     if (loaded.isNull()) {
-        _avatarButton->setIcon(QIcon(MakeInitialAvatarWithRing(_fallbackNickName, _fallbackUserName)));
-    } else {
-        _avatarButton->setIcon(QIcon(MakeCircularAvatar(loaded)));
+        ApplyFallbackAvatar();
+        return;
     }
-    RelayoutInParent();
-    QTimer::singleShot(0, this, [this]() { RelayoutInParent(); });
+
+    ApplyAvatarIcon(MakeCircularAvatar(loaded));
 }
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END

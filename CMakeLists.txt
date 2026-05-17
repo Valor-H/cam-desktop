@@ -30,17 +30,26 @@ set_target_properties(QCefView PROPERTIES
 )
 
 # 3. SARibbonBar
-set(SARibbonBar_DIR "D:/Codes/3rdparty/SARibbon/lib/cmake/SARibbonBar")
+set(SARibbonBar_DIR "D:/Codes/3rdparty/SARibbon/bin_qt5.15.2_MSVC_x64/lib/cmake/SARibbonBar")
 find_package(SARibbonBar REQUIRED)
-set(SARIBBON_DLL "D:/Codes/3rdparty/SARibbon/bin/SARibbonBard.dll")
+set_property(TARGET SARibbonBar::SARibbonBar APPEND PROPERTY
+    INTERFACE_INCLUDE_DIRECTORIES "D:/Codes/3rdparty/SARibbon/bin_qt5.15.2_MSVC_x64/include"
+)
+set(SARIBBON_RUNTIME_DIR "D:/Codes/3rdparty/SARibbon/bin_qt5.15.2_MSVC_x64/bin")
+set(SARIBBON_DLL_DEBUG "${SARIBBON_RUNTIME_DIR}/SARibbonBard.dll")
+set(SARIBBON_DLL_RELEASE "${SARIBBON_RUNTIME_DIR}/SARibbonBar.dll")
 
 # 4. libhv
-set(LIBHV_ROOT "D:/Codes/3rdparty/libhv/installed_debug")
+set(LIBHV_DEBUG_ROOT "D:/Codes/3rdparty/libhv_ssl_debug" CACHE PATH "libhv debug build root" FORCE)
+set(LIBHV_RELEASE_ROOT "D:/Codes/3rdparty/libhv_ssl_release" CACHE PATH "libhv release build root" FORCE)
 add_library(libhv SHARED IMPORTED GLOBAL)
 set_target_properties(libhv PROPERTIES
-    IMPORTED_LOCATION "${LIBHV_ROOT}/bin/hv.dll"
-    IMPORTED_IMPLIB "${LIBHV_ROOT}/lib/hv.lib"
-    INTERFACE_INCLUDE_DIRECTORIES "${LIBHV_ROOT}/include"
+    IMPORTED_CONFIGURATIONS "Debug;Release"
+    IMPORTED_LOCATION_DEBUG "${LIBHV_DEBUG_ROOT}/bin/hv.dll"
+    IMPORTED_IMPLIB_DEBUG "${LIBHV_DEBUG_ROOT}/lib/hv.lib"
+    IMPORTED_LOCATION_RELEASE "${LIBHV_RELEASE_ROOT}/bin/hv.dll"
+    IMPORTED_IMPLIB_RELEASE "${LIBHV_RELEASE_ROOT}/lib/hv.lib"
+    INTERFACE_INCLUDE_DIRECTORIES "${LIBHV_DEBUG_ROOT}/include"
     INTERFACE_LINK_LIBRARIES "secur32;crypt32;winmm;iphlpapi;ws2_32"
 )
 
