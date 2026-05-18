@@ -18,6 +18,9 @@ QJ_NAMESPACE_FIT_CLOUD_SERVER_END
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
+class HomeWorkspace;
+class ToolLibDialog;
+
 class NMainWindow : public SARibbonMainWindow
 {
     Q_OBJECT
@@ -53,6 +56,7 @@ private:
     void OnOpenPersonalProfile();
     void OnOpenFileManager();
     void OnOpenTeam();
+    void OnShowToolLibDialog();
     void OnOpen();
     void OnNewProject();
 
@@ -61,8 +65,9 @@ private:
     QAction* _actionDocument { nullptr };
     qianjizn::cloudserver::UserAuthService _userAuth { qianjizn::cloudserver::UserModuleConfig {} };
     qianjizn::cloudserver::DesktopWebServer* _desktopWebServer { nullptr };
-    QWidget* _homeWorkspace { nullptr };
+    HomeWorkspace* _homeWorkspace { nullptr };
     FileManagerView* _fileManagerView { nullptr };
+    ToolLibDialog* _toolLibDialog { nullptr };
     qianjizn::cloudserver::TitleBarUserChip* _userChip { nullptr };
     QMenu* _loginMenu { nullptr };
     QAction* _personalCenterAction { nullptr };
