@@ -8,7 +8,7 @@
 
 #include <QStringList>
 
-using namespace qianjizn::project_management;
+using namespace qianjizn::project;
 
 namespace LocalFilesSnapshot
 {

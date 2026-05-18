@@ -26,8 +26,8 @@ public:
 private:
     /** 配置服务可用的路由。 */
     void ConfigureRoutes();
-    /** 返回注入桌面 bootstrap 后的 index.html 内容。 */
-    QString BuildIndexHtmlResponse() const;
+    /** 构建桌面端运行时配置 JSON。 */
+    QString BuildRuntimeConfigJson() const;
     /** 将请求路径解析为静态文件路径。 */
     QString ResolveStaticFilePath(const QString& requestPath) const;
     /** 返回静态网页根目录路径。 */

@@ -15,10 +15,6 @@ QJsonObject BuildDesktopRuntimePayload(const UserAuthService* authService)
     QJsonObject payload {
         { QStringLiteral("runtimeMode"), QStringLiteral("desktop") },
         { QStringLiteral("loggedIn"), false },
-        { QStringLiteral("backendUrl"), QString() },
-        { QStringLiteral("websocketUrl"), QString() },
-        { QStringLiteral("helpDocUrl"), QString() },
-        { QStringLiteral("mockServiceUrl"), QString() },
         { QStringLiteral("token"), QString() },
         { QStringLiteral("user"), QJsonValue::Null },
     };
@@ -32,10 +28,6 @@ QJsonObject BuildDesktopRuntimePayload(const UserAuthService* authService)
     const bool loggedIn = authService->Session()->IsAuthenticated() && !token.isEmpty() && !currentUser.isEmpty();
 
     payload.insert(QStringLiteral("loggedIn"), loggedIn);
-    payload.insert(QStringLiteral("backendUrl"), authService->ApiBaseUrl().toString().trimmed());
-    payload.insert(QStringLiteral("websocketUrl"), authService->Config().websocketUrl.toString().trimmed());
-    payload.insert(QStringLiteral("helpDocUrl"), authService->Config().helpDocUrl.toString().trimmed());
-    payload.insert(QStringLiteral("mockServiceUrl"), authService->Config().mockServiceUrl.toString().trimmed());
     payload.insert(QStringLiteral("token"), loggedIn ? token : QString());
     if (loggedIn) {
         payload.insert(QStringLiteral("user"), QJsonObject::fromVariantMap(currentUser));

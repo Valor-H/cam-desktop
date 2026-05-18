@@ -1,11 +1,11 @@
 #include "desktop_web_server.h"
 
-#include "desktop_runtime_injection.h"
 #include "user_auth_service.h"
 
 #include <QDir>
-#include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 #include <hv/HttpServer.h>
 
@@ -16,34 +16,6 @@ struct DesktopWebServer::Private
     hv::HttpService service;
     hv::HttpServer server;
 };
-
-namespace
-{
-QString InjectBootstrapScriptIntoHtml(QString html, QString script)
-{
-    if (html.isEmpty() || script.isEmpty()) {
-        return html;
-    }
-
-    script.replace(QStringLiteral("</script"), QStringLiteral("<\\/script"), Qt::CaseInsensitive);
-    const QString injection = QStringLiteral("<script>%1</script>").arg(script);
-
-    const qsizetype headIndex = html.indexOf(QStringLiteral("</head>"), 0, Qt::CaseInsensitive);
-    if (headIndex >= 0) {
-        html.insert(headIndex, injection);
-        return html;
-    }
-
-    const qsizetype bodyIndex = html.indexOf(QStringLiteral("</body>"), 0, Qt::CaseInsensitive);
-    if (bodyIndex >= 0) {
-        html.insert(bodyIndex, injection);
-        return html;
-    }
-
-    html.prepend(injection);
-    return html;
-}
-}
 
 DesktopWebServer::DesktopWebServer(UserAuthService* authService, QObject* parent)
     : QObject(parent)
@@ -107,42 +79,38 @@ void DesktopWebServer::ConfigureRoutes()
 
         const QString path =
             (!req || req->Path().empty()) ? QStringLiteral("/") : QString::fromStdString(req->Path());
+        if (path.compare(QStringLiteral("/config.json"), Qt::CaseInsensitive) == 0) {
+            const QString json = BuildRuntimeConfigJson();
+            if (json.isEmpty()) {
+                return HTTP_STATUS_INTERNAL_SERVER_ERROR;
+            }
+
+            resp->SetContentType(APPLICATION_JSON);
+            resp->SetBody(json.toStdString());
+            return HTTP_STATUS_OK;
+        }
+
         const QString filePath = ResolveStaticFilePath(path);
         if (!filePath.isEmpty()) {
-            if (QFileInfo(filePath).fileName().compare(QStringLiteral("index.html"), Qt::CaseInsensitive) == 0) {
-                const QString html = BuildIndexHtmlResponse();
-                if (html.isEmpty()) {
-                    return HTTP_STATUS_NOT_FOUND;
-                }
-                resp->SetContentType(TEXT_HTML);
-                resp->SetBody(html.toStdString());
-                return HTTP_STATUS_OK;
-            }
             return resp->File(filePath.toStdString().c_str());
         }
 
-        const QString html = BuildIndexHtmlResponse();
-        if (html.isEmpty()) {
-            return HTTP_STATUS_NOT_FOUND;
-        }
-
-        resp->SetContentType(TEXT_HTML);
-        resp->SetBody(html.toStdString());
-        return HTTP_STATUS_OK;
+        const QString indexPath = QDir(WebRootPath()).filePath(QStringLiteral("index.html"));
+        return resp->File(indexPath.toStdString().c_str());
     });
 }
 
-QString DesktopWebServer::BuildIndexHtmlResponse() const
+QString DesktopWebServer::BuildRuntimeConfigJson() const
 {
-    const QString indexPath = QDir(WebRootPath()).filePath(QStringLiteral("index.html"));
-    QFile indexFile(indexPath);
-    if (!indexFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        return QString();
-    }
+    QJsonObject payload {
+        { QStringLiteral("runtimeMode"), QStringLiteral("desktop") },
+        { QStringLiteral("backendUrl"), m_authService ? m_authService->ApiBaseUrl().toString().trimmed() : QString() },
+        { QStringLiteral("websocketUrl"), m_authService ? m_authService->Config().websocketUrl.toString().trimmed() : QString() },
+        { QStringLiteral("helpDocUrl"), m_authService ? m_authService->Config().helpDocUrl.toString().trimmed() : QString() },
+        { QStringLiteral("mockServiceUrl"), m_authService ? m_authService->Config().mockServiceUrl.toString().trimmed() : QString() },
+    };
 
-    const QString html = QString::fromUtf8(indexFile.readAll());
-    const QString bootstrapScript = BuildDesktopRuntimeInjectionScript(m_authService);
-    return InjectBootstrapScriptIntoHtml(html, bootstrapScript);
+    return QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
 }
 
 QString DesktopWebServer::ResolveStaticFilePath(const QString& requestPath) const
