@@ -23,7 +23,7 @@ public:
     /** 定义外部单点登录地址回调类型。 */
     using WebSsoUrlCallback = std::function<void(const QUrl& url, const QString& errorMessage)>;
     /** 构造用户认证服务。 */
-    explicit UserAuthService(const UserModuleConfig& cfg, QObject* parent = nullptr);
+    explicit UserAuthService(const CloudServerConfig& cfg, QObject* parent = nullptr);
     /** 析构用户认证服务。 */
     ~UserAuthService() override;
     /** 返回可写的当前用户会话对象。 */
@@ -31,7 +31,7 @@ public:
     /** 返回只读的当前用户会话对象。 */
     const UserSession* Session() const { return &_userSession; }
     /** 返回当前模块配置。 */
-    const UserModuleConfig& Config() const { return _cfg; }
+    const CloudServerConfig& Config() const { return _cfg; }
     /** 返回接口基础地址。 */
     QUrl ApiBaseUrl() const { return _cfg.apiBaseUrl; }
     /** 返回前端基础地址。 */
@@ -73,7 +73,7 @@ private:
     /** 直接刷新令牌并重试请求。 */
     void RefreshTokenDirectAndRetry(const QString& token);
     /** 保存当前模块配置。 */
-    UserModuleConfig _cfg;
+    CloudServerConfig _cfg;
     /** 保存当前用户会话。 */
     UserSession _userSession;
     /** 保存认证 HTTP 客户端。 */

@@ -7,7 +7,7 @@
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 
-struct CLOUD_SERVER_EXPORT UserModuleConfig
+struct CLOUD_SERVER_EXPORT CloudServerConfig
 {
     /** 保存接口基础地址。 */
     QUrl apiBaseUrl { QStringLiteral("http://123.206.219.169:8080") };

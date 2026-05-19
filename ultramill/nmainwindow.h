@@ -63,7 +63,7 @@ private:
     QAction* _actionNew { nullptr };
     QAction* _actionOpen { nullptr };
     QAction* _actionDocument { nullptr };
-    qianjizn::cloudserver::UserAuthService _userAuth { qianjizn::cloudserver::UserModuleConfig {} };
+    qianjizn::cloudserver::UserAuthService _userAuth { qianjizn::cloudserver::CloudServerConfig {} };
     qianjizn::cloudserver::DesktopWebServer* _desktopWebServer { nullptr };
     HomeWorkspace* _homeWorkspace { nullptr };
     FileManagerView* _fileManagerView { nullptr };

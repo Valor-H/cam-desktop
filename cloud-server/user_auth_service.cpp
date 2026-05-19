@@ -26,7 +26,7 @@ QString apiBaseStringForClient(const QUrl& u)
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 
-UserAuthService::UserAuthService(const UserModuleConfig& cfg, QObject* parent)
+UserAuthService::UserAuthService(const CloudServerConfig& cfg, QObject* parent)
     : QObject(parent)
     , _cfg(cfg)
     , _userSession(this)
