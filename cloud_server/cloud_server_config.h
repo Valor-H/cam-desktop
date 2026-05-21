@@ -10,7 +10,7 @@ QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 struct CLOUD_SERVER_EXPORT CloudServerConfig
 {
     /** 保存接口基础地址。 */
-    QUrl apiBaseUrl { QStringLiteral("http://123.206.219.169:8080") };
+    QUrl apiBaseUrl { QStringLiteral("http://localhost:8080") };
     /** 保存 WebSocket 服务地址。 */
     QUrl websocketUrl { QStringLiteral("ws://localhost:8091/ws") };
     /** 保存帮助文档地址。 */

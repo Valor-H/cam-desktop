@@ -38,6 +38,21 @@ HomeWorkspace::HomeWorkspace(QWidget* parent)
     leftHeaderLayout->setContentsMargins(12, 6, 12, 6);
     leftHeaderLayout->setSpacing(8);
 
+    auto* newDemoButton = new QPushButton(tr("New Demo"), leftHeader);
+    newDemoButton->setCursor(Qt::PointingHandCursor);
+    newDemoButton->setStyleSheet(QStringLiteral(
+        "QPushButton {"
+        "padding: 6px 12px;"
+        "background: #ffffff;"
+        "color: #1558b0;"
+        "border: 1px solid #b9c7d8;"
+        "border-radius: 4px;"
+        "font-weight: 600;"
+        "}"
+        "QPushButton:hover { background: #eef4fb; }"));
+    leftHeaderLayout->addWidget(newDemoButton, 0, Qt::AlignLeft | Qt::AlignVCenter);
+    connect(newDemoButton, &QPushButton::clicked, this, &HomeWorkspace::NewDemoRequested);
+
     auto* toolLibButton = new QPushButton(tr("Tool Library"), leftHeader);
     toolLibButton->setCursor(Qt::PointingHandCursor);
     toolLibButton->setStyleSheet(QStringLiteral(

@@ -16,7 +16,6 @@
 
 #include <QAbstractButton>
 #include <QAction>
-#include <QColor>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QEvent>
@@ -38,14 +37,22 @@ QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
 namespace
 {
+void showStandaloneDemoWindow()
+{
+    auto* window = new NMainWindow();
+    window->setAttribute(Qt::WA_DeleteOnClose, true);
+    window->showMaximized();
+}
 }
 
 NMainWindow::NMainWindow(QWidget* parent)
     : SARibbonMainWindow(parent)
 {
+    ApplyWindowPresentation();
+
+    _actionDocument = new QAction(QStringLiteral("Document"), this);
     _actionNew = new QAction(QIcon(), tr("New"), this);
     _actionOpen = new QAction(QIcon(), tr("Open"), this);
-    _actionDocument = new QAction(QStringLiteral("Document"), this);
 
     connect(_userAuth.Session(), &UserSession::AuthStateChanged, this, &NMainWindow::RefreshUserChipFromSession);
     connect(_userAuth.Session(), &UserSession::UserProfileChanged, this, &NMainWindow::RefreshUserChipFromSession);
@@ -58,6 +65,13 @@ NMainWindow::NMainWindow(QWidget* parent)
 }
 
 NMainWindow::~NMainWindow() = default;
+
+void NMainWindow::ApplyWindowPresentation()
+{
+    setWindowTitle(tr("CamDemo"));
+    setWindowIcon(QIcon(QStringLiteral(":/qjcam/resource/logo.ico")));
+    setMinimumSize(1000, 800);
+}
 
 bool NMainWindow::EnsureDesktopWebServerReady(bool showWarning)
 {
@@ -91,6 +105,9 @@ bool NMainWindow::event(QEvent* e)
 {
     if (e && e->type() == QEvent::WindowActivate) {
         _userAuth.OnWindowActivateEvent();
+        if (_fileManagerView && _fileManagerView->isVisible()) {
+            _fileManagerView->RefreshCurrentPage();
+        }
     }
     if (e && (e->type() == QEvent::Resize || e->type() == QEvent::LayoutRequest || e->type() == QEvent::Show)) {
         UpdateFileManagerOverlayGeometry();
@@ -119,6 +136,7 @@ void NMainWindow::InitCentralWorkspace()
     }
 
     _homeWorkspace = new HomeWorkspace(this);
+    connect(_homeWorkspace, &HomeWorkspace::NewDemoRequested, this, &NMainWindow::OnOpenNewDemoWindow);
     connect(_homeWorkspace, &HomeWorkspace::ToolLibRequested, this, &NMainWindow::OnShowToolLibDialog);
 
     setCentralWidget(_homeWorkspace);
@@ -144,22 +162,11 @@ void NMainWindow::InitRibbonBar()
 
     ribbonBarWidget->setRibbonStyle(SARibbonBar::RibbonStyleLooseThreeRow);
     ribbonBarWidget->setApplicationButton(nullptr);
-    ribbonBarWidget->setWindowTitleBackgroundBrush(QColor(QStringLiteral("#f0f0f0")));
-    if (SARibbonTabBar* tabBar = ribbonBarWidget->ribbonTabBar()) {
-        tabBar->setStyleSheet(QStringLiteral("background-color: #f0f0f0;"));
-    }
 
     if (SARibbonQuickAccessBar* quickAccessBar = ribbonBarWidget->quickAccessBar()) {
-        quickAccessBar->setStyleSheet(QStringLiteral("QToolBar { background-color: #f0f0f0; border: none; }"));
         quickAccessBar->addAction(_actionDocument);
         quickAccessBar->addAction(_actionNew);
         quickAccessBar->addAction(_actionOpen);
-    }
-    if (SARibbonTitleIconWidget* iconWidget = ribbonBarWidget->titleIconWidget()) {
-        iconWidget->setStyleSheet(QStringLiteral("background-color: #f0f0f0;"));
-    }
-    if (SARibbonSystemButtonBar* buttonBar = windowButtonBar()) {
-        buttonBar->setStyleSheet(QStringLiteral("SARibbonSystemButtonBar { background-color: #f0f0f0; }"));
     }
 
     const auto makeAction = [this](const QString& text, QStyle::StandardPixmap iconType) {
@@ -410,6 +417,14 @@ void NMainWindow::OnShowToolLibDialog()
     _toolLibDialog->show();
     _toolLibDialog->raise();
     _toolLibDialog->activateWindow();
+}
+
+void NMainWindow::OnOpenNewDemoWindow()
+{
+    showStandaloneDemoWindow();
+    if (statusBar()) {
+        statusBar()->showMessage(tr("Opened a new demo window."), 2000);
+    }
 }
 
 void NMainWindow::OnOpen()

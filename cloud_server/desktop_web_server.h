@@ -38,6 +38,8 @@ private:
     QScopedPointer<Private> d;
     /** 保存认证服务实例。 */
     UserAuthService* m_authService { nullptr };
+    /** 标识 HTTP 服务是否已注册。 */
+    bool m_serviceRegistered { false };
     /** 标识服务是否已经启动。 */
     bool m_started { false };
     /** 保存服务监听端口。 */

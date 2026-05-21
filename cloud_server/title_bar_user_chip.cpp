@@ -4,6 +4,7 @@
 #include <QCoreApplication>
 #include <QHBoxLayout>
 #include <QDebug>
+#include <QIcon>
 #include <QLayout>
 #include <QPainter>
 #include <QPainterPath>
@@ -254,8 +255,10 @@ QPixmap TitleBarUserChip::MakeInitialAvatarWithRing(const QString& nickName, con
 
 QPixmap TitleBarUserChip::LoadAvatarRaster(const char* resourcePath, int side)
 {
-    QPixmap loaded;
-    if (!loaded.load(QString::fromUtf8(resourcePath))) {
+    QIcon icon;
+    icon.addFile(QString::fromUtf8(resourcePath), QSize(side, side));
+    const QPixmap loaded = icon.pixmap(side, side);
+    if (loaded.isNull()) {
         QPixmap px(side, side);
         px.fill(QColor(QStringLiteral("#E0E0E0")));
         return px;

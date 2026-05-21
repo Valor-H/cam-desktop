@@ -15,6 +15,7 @@ public:
     ~HomeWorkspace() override;
 
 signals:
+    void NewDemoRequested();
     void ToolLibRequested();
 };
 

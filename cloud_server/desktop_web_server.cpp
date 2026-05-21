@@ -2,14 +2,39 @@
 
 #include "user_auth_service.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QHostAddress>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTcpServer>
 
 #include <hv/HttpServer.h>
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
+
+namespace
+{
+constexpr int kDesktopWebServerBasePort = 31870;
+constexpr int kDesktopWebServerMaxPortScan = 200;
+
+int findAvailableDesktopWebPort(int preferredPort)
+{
+    const int startPort = preferredPort > 0 ? preferredPort : kDesktopWebServerBasePort;
+    QTcpServer probe;
+
+    for (int offset = 0; offset < kDesktopWebServerMaxPortScan; ++offset) {
+        const int candidatePort = startPort + offset;
+        if (probe.listen(QHostAddress::LocalHost, static_cast<quint16>(candidatePort))) {
+            probe.close();
+            return candidatePort;
+        }
+    }
+
+    return -1;
+}
+}
 
 struct DesktopWebServer::Private
 {
@@ -41,14 +66,24 @@ bool DesktopWebServer::Start()
         return false;
     }
 
-    d->server.registerHttpService(&d->service);
+    if (!m_serviceRegistered) {
+        d->server.registerHttpService(&d->service);
+        m_serviceRegistered = true;
+    }
+
+    const int port = findAvailableDesktopWebPort(m_port);
+    if (port <= 0) {
+        return false;
+    }
+
     d->server.setHost("127.0.0.1");
-    d->server.setPort(m_port);
+    d->server.setPort(port);
     d->server.setThreadNum(1);
     if (d->server.start() != 0) {
         return false;
     }
 
+    m_port = port;
     m_started = true;
     return true;
 }
@@ -140,7 +175,7 @@ QString DesktopWebServer::ResolveStaticFilePath(const QString& requestPath) cons
 
 QString DesktopWebServer::WebRootPath() const
 {
-    return QStringLiteral("D:/Codes/cloud-cam-front/dist");
+    return QDir(QCoreApplication::applicationDirPath()).absoluteFilePath(QStringLiteral("D:/Codes/cloud-cam-front/dist"));
 }
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END
