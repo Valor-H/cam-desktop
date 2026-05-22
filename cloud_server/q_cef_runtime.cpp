@@ -3,8 +3,9 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
-#include <QStandardPaths>
 #include <QColor>
+#include <QFileInfo>
+#include <QStandardPaths>
 
 #include <QCefContext.h>
 
@@ -43,10 +44,14 @@ void QCefRuntime::InitConfig()
 
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString cefBundle = QDir(appDir).filePath(QStringLiteral("CefView"));
+    const QString appLocalData = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
+    const QString exeName = QFileInfo(QCoreApplication::applicationFilePath()).completeBaseName();
+    const QString instanceCachePath = QDir(appLocalData).filePath(
+        QStringLiteral("QJCAM/cef/%1-%2").arg(exeName, QString::number(QCoreApplication::applicationPid())));
+
     m_config.setResourceDirectoryPath(QDir(cefBundle).filePath(QStringLiteral("Resources")));
     m_config.setLocalesDirectoryPath(QDir(cefBundle).filePath(QStringLiteral("locales")));
-    m_config.setCachePath(
-        QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + QStringLiteral("/CamDemo/cef"));
+    m_config.setCachePath(instanceCachePath);
 }
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END

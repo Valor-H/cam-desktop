@@ -58,7 +58,6 @@ private:
     void OnOpenFileManager();
     void OnOpenTeam();
     void OnShowToolLibDialog();
-    void OnOpenNewDemoWindow();
     void OnOpen();
     void OnNewProject();
 

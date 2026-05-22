@@ -5,10 +5,8 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
-#include <QHostAddress>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QTcpServer>
 
 #include <hv/HttpServer.h>
 
@@ -19,15 +17,14 @@ namespace
 constexpr int kDesktopWebServerBasePort = 31870;
 constexpr int kDesktopWebServerMaxPortScan = 200;
 
-int findAvailableDesktopWebPort(int preferredPort)
+int startDesktopWebServer(hv::HttpServer& server, int preferredPort)
 {
     const int startPort = preferredPort > 0 ? preferredPort : kDesktopWebServerBasePort;
-    QTcpServer probe;
 
     for (int offset = 0; offset < kDesktopWebServerMaxPortScan; ++offset) {
         const int candidatePort = startPort + offset;
-        if (probe.listen(QHostAddress::LocalHost, static_cast<quint16>(candidatePort))) {
-            probe.close();
+        server.setPort(candidatePort);
+        if (server.start() == 0) {
             return candidatePort;
         }
     }
@@ -71,15 +68,11 @@ bool DesktopWebServer::Start()
         m_serviceRegistered = true;
     }
 
-    const int port = findAvailableDesktopWebPort(m_port);
-    if (port <= 0) {
-        return false;
-    }
-
     d->server.setHost("127.0.0.1");
-    d->server.setPort(port);
     d->server.setThreadNum(1);
-    if (d->server.start() != 0) {
+
+    const int port = startDesktopWebServer(d->server, m_port);
+    if (port <= 0) {
         return false;
     }
 

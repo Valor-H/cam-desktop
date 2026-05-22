@@ -38,9 +38,9 @@ HomeWorkspace::HomeWorkspace(QWidget* parent)
     leftHeaderLayout->setContentsMargins(12, 6, 12, 6);
     leftHeaderLayout->setSpacing(8);
 
-    auto* newDemoButton = new QPushButton(tr("New Demo"), leftHeader);
-    newDemoButton->setCursor(Qt::PointingHandCursor);
-    newDemoButton->setStyleSheet(QStringLiteral(
+    auto* newProjectButton = new QPushButton(tr("New Project"), leftHeader);
+    newProjectButton->setCursor(Qt::PointingHandCursor);
+    newProjectButton->setStyleSheet(QStringLiteral(
         "QPushButton {"
         "padding: 6px 12px;"
         "background: #ffffff;"
@@ -50,8 +50,8 @@ HomeWorkspace::HomeWorkspace(QWidget* parent)
         "font-weight: 600;"
         "}"
         "QPushButton:hover { background: #eef4fb; }"));
-    leftHeaderLayout->addWidget(newDemoButton, 0, Qt::AlignLeft | Qt::AlignVCenter);
-    connect(newDemoButton, &QPushButton::clicked, this, &HomeWorkspace::NewDemoRequested);
+    leftHeaderLayout->addWidget(newProjectButton, 0, Qt::AlignLeft | Qt::AlignVCenter);
+    connect(newProjectButton, &QPushButton::clicked, this, &HomeWorkspace::NewProjectRequested);
 
     auto* toolLibButton = new QPushButton(tr("Tool Library"), leftHeader);
     toolLibButton->setCursor(Qt::PointingHandCursor);

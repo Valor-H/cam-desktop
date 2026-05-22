@@ -22,6 +22,7 @@
 #include <QIcon>
 #include <QMenu>
 #include <QMessageBox>
+#include <QProcess>
 #include <QSizePolicy>
 #include <QStatusBar>
 #include <QStyle>
@@ -34,16 +35,6 @@
 using qianjizn::cloudserver::UserSession;
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
-
-namespace
-{
-void showStandaloneDemoWindow()
-{
-    auto* window = new NMainWindow();
-    window->setAttribute(Qt::WA_DeleteOnClose, true);
-    window->showMaximized();
-}
-}
 
 NMainWindow::NMainWindow(QWidget* parent)
     : SARibbonMainWindow(parent)
@@ -136,7 +127,7 @@ void NMainWindow::InitCentralWorkspace()
     }
 
     _homeWorkspace = new HomeWorkspace(this);
-    connect(_homeWorkspace, &HomeWorkspace::NewDemoRequested, this, &NMainWindow::OnOpenNewDemoWindow);
+    connect(_homeWorkspace, &HomeWorkspace::NewProjectRequested, this, &NMainWindow::OnNewProject);
     connect(_homeWorkspace, &HomeWorkspace::ToolLibRequested, this, &NMainWindow::OnShowToolLibDialog);
 
     setCentralWidget(_homeWorkspace);
@@ -419,14 +410,6 @@ void NMainWindow::OnShowToolLibDialog()
     _toolLibDialog->activateWindow();
 }
 
-void NMainWindow::OnOpenNewDemoWindow()
-{
-    showStandaloneDemoWindow();
-    if (statusBar()) {
-        statusBar()->showMessage(tr("Opened a new demo window."), 2000);
-    }
-}
-
 void NMainWindow::OnOpen()
 {
     ShowHomeWorkspace();
@@ -439,8 +422,15 @@ void NMainWindow::OnOpen()
 void NMainWindow::OnNewProject()
 {
     ShowHomeWorkspace();
+    const QString program = QCoreApplication::applicationFilePath();
+    const bool started = QProcess::startDetached(program, QStringList {}, QCoreApplication::applicationDirPath());
     if (statusBar()) {
-        statusBar()->showMessage(tr("New project command requested."), 2000);
+        statusBar()->showMessage(
+            started ? tr("Started a new project window.") : tr("Failed to start a new project window."),
+            2000);
+    }
+    if (!started) {
+        QMessageBox::warning(this, tr("Warning"), tr("Failed to start a new project window."));
     }
 }
 
