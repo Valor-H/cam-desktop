@@ -3,6 +3,7 @@
 #include "auth_http_client.h"
 #include "account_auth_dialog.h"
 #include "desktop_web.h"
+#include "local_auth_sync_channel.h"
 
 #include <QSettings>
 #include <QWidget>
@@ -31,6 +32,10 @@ UserAuthService::UserAuthService(const CloudServerConfig& cfg, QObject* parent)
     , _cfg(cfg)
     , _userSession(this)
     , _authClient(new AuthHttpClient(apiBaseStringForClient(_cfg.apiBaseUrl), this))
+    , _authSyncChannel(new LocalAuthSyncChannel(
+      _cfg,
+      [this](bool authenticated) { ApplyAuthStateChangedFromPeer(authenticated); },
+      this))
 {
     _windowActivateRefreshDebounceTimer = new QTimer(this);
     _windowActivateRefreshDebounceTimer->setSingleShot(true);
@@ -52,6 +57,44 @@ void UserAuthService::CancelAllPendingRequests()
     }
 }
 
+void UserAuthService::BroadcastAuthStateChanged(bool authenticated)
+{
+    if (!_authSyncChannel) {
+        return;
+    }
+    _authSyncChannel->Broadcast(authenticated);
+}
+
+void UserAuthService::ApplyAuthStateChangedFromPeer(bool authenticated)
+{
+    if (authenticated) {
+        SyncSessionFromSharedSettings();
+        return;
+    }
+
+    if (!LoadAuthTokenFromSettings().isEmpty()) {
+        return;
+    }
+
+    CancelAllPendingRequests();
+    _userHydrationInFlight = false;
+    _userSession.Logout();
+}
+
+void UserAuthService::SyncSessionFromSharedSettings()
+{
+    const QString token = LoadAuthTokenFromSettings();
+    if (token.isEmpty()) {
+        return;
+    }
+
+    QVariantMap data;
+    data.insert(QStringLiteral("token"), token);
+    data.insert(QStringLiteral("loggedIn"), true);
+    _userSession.ApplyFromProbe(data);
+    StartDirectUserHydration(token, true);
+}
+
 void UserAuthService::ShowAccountAuthDialog(QWidget* parent)
 {
     const QUrl loginUrl = buildDesktopLoginUrl(_cfg.frontendBaseUrl);
@@ -66,6 +109,7 @@ void UserAuthService::Logout()
     _userHydrationInFlight = false;
     ClearAuthTokenFromSettings();
     _userSession.Logout();
+    BroadcastAuthStateChanged(false);
 }
 
 void UserAuthService::OnLoginSucceeded(const QVariantMap& payload)
@@ -73,20 +117,12 @@ void UserAuthService::OnLoginSucceeded(const QVariantMap& payload)
     CancelAllPendingRequests();
     SaveAuthTokenToSettings(payload.value(QStringLiteral("token")).toString());
     _userSession.ApplyFromLoginPayload(payload);
+    BroadcastAuthStateChanged(true);
 }
 
 void UserAuthService::InitFromStoredToken()
 {
-    const QString token = LoadAuthTokenFromSettings();
-    if (token.isEmpty()) {
-        return;
-    }
-
-    QVariantMap data;
-    data.insert(QStringLiteral("token"), token);
-    data.insert(QStringLiteral("loggedIn"), true);
-    _userSession.ApplyFromProbe(data);
-    StartDirectUserHydration(token, true);
+    SyncSessionFromSharedSettings();
 }
 
 void UserAuthService::BuildExternalWebSsoUrl(const QString& redirectPath, WebSsoUrlCallback callback)
@@ -236,6 +272,9 @@ void UserAuthService::ClearAuthTokenFromSettings()
 
 void UserAuthService::OnWindowActivateEvent()
 {
+    if (!_userSession.IsAuthenticated()) {
+        SyncSessionFromSharedSettings();
+    }
     ScheduleWindowActivateRefresh();
 }
 

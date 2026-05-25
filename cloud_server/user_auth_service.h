@@ -15,6 +15,8 @@ class QWidget;
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 
+class LocalAuthSyncChannel;
+
 class CLOUD_SERVER_EXPORT UserAuthService final : public QObject
 {
     Q_OBJECT
@@ -58,6 +60,12 @@ private slots:
     void TryRefreshUserProfileOnWindowActivate();
 
 private:
+    /** 向其他进程广播认证状态变化。 */
+    void BroadcastAuthStateChanged(bool authenticated);
+    /** 应用来自其他进程的认证状态变化。 */
+    void ApplyAuthStateChangedFromPeer(bool authenticated);
+    /** 从共享设置同步当前实例的认证状态。 */
+    void SyncSessionFromSharedSettings();
     /** 安排窗口激活后的资料刷新。 */
     void ScheduleWindowActivateRefresh();
     /** 将认证令牌保存到设置。 */
@@ -78,6 +86,8 @@ private:
     UserSession _userSession;
     /** 保存认证 HTTP 客户端。 */
     AuthHttpClient* _authClient { nullptr };
+    /** 保存跨进程认证同步通道。 */
+    LocalAuthSyncChannel* _authSyncChannel { nullptr };
     /** 保存窗口激活刷新防抖定时器。 */
     QTimer* _windowActivateRefreshDebounceTimer { nullptr };
     /** 记录上次窗口激活刷新时间。 */
