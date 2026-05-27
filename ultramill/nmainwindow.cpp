@@ -112,7 +112,8 @@ bool NMainWindow::event(QEvent* e)
             _fileManagerView->RefreshCurrentPage();
         }
     }
-    if (e && (e->type() == QEvent::Resize || e->type() == QEvent::LayoutRequest || e->type() == QEvent::Show)) {
+    if (e && (e->type() == QEvent::Move || e->type() == QEvent::Resize || e->type() == QEvent::LayoutRequest
+              || e->type() == QEvent::Show)) {
         UpdateFileManagerOverlayGeometry();
     }
     return SARibbonMainWindow::event(e);
@@ -292,7 +293,8 @@ void NMainWindow::UpdateFileManagerOverlayGeometry()
 
     overlayTop = qMax(0, overlayTop);
     const int overlayHeight = qMax(0, height() - overlayTop);
-    _fileManagerView->setGeometry(0, overlayTop, width(), overlayHeight);
+    const QPoint topLeft = mapToGlobal(QPoint(0, overlayTop));
+    _fileManagerView->setGeometry(QRect(topLeft, QSize(width(), overlayHeight)));
 }
 
 void NMainWindow::OnShowAccountAuthDialog()

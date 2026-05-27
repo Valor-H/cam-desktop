@@ -78,6 +78,7 @@ FileManagerView::FileManagerView(QWidget* parent,
     , m_authService(authService)
     , m_cloudFileService(cloudFileService)
 {
+    setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
     setObjectName(QStringLiteral("embeddedFileManagerOverlay"));
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setAutoFillBackground(true);
@@ -200,6 +201,7 @@ bool FileManagerView::event(QEvent* event)
 void FileManagerView::showEvent(QShowEvent* event)
 {
     QWidget::showEvent(event);
+    raise();
     ScheduleNativeBrowserWindowSync();
 }
 
