@@ -2,6 +2,8 @@
 
 #include "cloud_server_global.h"
 
+#include <cloud_server/cloud_file_service.h>
+
 #include <QUrl>
 #include <QVariantMap>
 #include <QWidget>
@@ -16,7 +18,6 @@ template <typename T>
 class QFutureWatcher;
 
 class QCefView;
-class AuthHttpClient;
 class QWindow;
 
 namespace LocalFilesSnapshot
@@ -34,7 +35,10 @@ class CLOUD_SERVER_EXPORT FileManagerView : public QWidget
 
 public:
     /** 构造文件管理视图。 */
-    explicit FileManagerView(QWidget* parent, qianjizn::cloudserver::UserAuthService* authService, const QUrl& pageUrl);
+    explicit FileManagerView(QWidget* parent,
+                             qianjizn::cloudserver::UserAuthService* authService,
+                             qianjizn::cloudserver::CloudFileService* cloudFileService,
+                             const QUrl& pageUrl);
     /** 析构文件管理视图。 */
     ~FileManagerView() override;
     /** 刷新当前网页页面。 */
@@ -53,6 +57,8 @@ protected:
 signals:
     /** 请求打开指定本地文件。 */
     void OpenFileRequested(const QString& filePath);
+    /** 请求打开已缓存到本地的云端文件。 */
+    void OpenCloudFileRequested(const QString& filePath, const QString& fileUuid);
     /** 请求执行打开操作。 */
     void OpenRequested();
     /** 请求新建项目。 */
@@ -87,16 +93,12 @@ private:
     void OpenRecentCloudFile(const QVariantMap& payload, const QCefQuery* query = nullptr);
     /** 解析最近访问本地文件路径。 */
     QString ResolveRecentLocalPath(const QVariantMap& payload) const;
-    /** 构建缓存文件路径。 */
-    QString BuildCacheFilePath(const QVariantMap& payload) const;
     /** 判断是否为桌面端最近文件请求。 */
     bool IsDesktopRecentRequest(const QVariantMap& payload) const;
     /** 回复打开最近文件失败信息。 */
     void ReplyOpenRecentFileError(const QCefQuery& query, const QString& message, int errorCode = 500);
     /** 回复打开最近文件成功信息。 */
     void ReplyOpenRecentFileSuccess(const QCefQuery& query, const QString& openedPath);
-    /** 确保文件下载 HTTP 客户端已创建。 */
-    AuthHttpClient* EnsureFileHttpClient();
     /** 立即同步原生浏览器窗口。 */
     void SyncNativeBrowserWindowNow();
     /** 安排一次原生浏览器窗口同步。 */
@@ -109,10 +111,10 @@ private:
     QWindow* m_nativeBrowserWindow { nullptr };
     /** 监听本地文件快照异步结果。 */
     QFutureWatcher<LocalFilesSnapshot::Result>* m_snapshotWatcher { nullptr };
-    /** 处理文件下载请求的 HTTP 客户端。 */
-    AuthHttpClient* m_fileHttpClient { nullptr };
     /** 保存认证服务实例。 */
     qianjizn::cloudserver::UserAuthService* m_authService { nullptr };
+    /** 保存云文件服务实例。 */
+    qianjizn::cloudserver::CloudFileService* m_cloudFileService { nullptr };
     /** 保存待处理的本地文件查询。 */
     QCefQuery m_pendingLocalFilesQuery;
     /** 标识是否存在待处理的本地文件查询。 */

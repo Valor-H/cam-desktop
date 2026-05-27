@@ -168,7 +168,22 @@ QString DesktopWebServer::ResolveStaticFilePath(const QString& requestPath) cons
 
 QString DesktopWebServer::WebRootPath() const
 {
-    return QDir(QCoreApplication::applicationDirPath()).absoluteFilePath(QStringLiteral("D:/Codes/cloud-cam-front/dist"));
+    const QDir appDir(QCoreApplication::applicationDirPath());
+
+    const QString localWebRoot = appDir.absoluteFilePath(QStringLiteral("web"));
+    if (QFileInfo::exists(QDir(localWebRoot).filePath(QStringLiteral("index.html")))) {
+        return localWebRoot;
+    }
+
+    QDir runtimeRoot(appDir);
+    if (runtimeRoot.cdUp()) {
+        const QString siblingWebRoot = runtimeRoot.absoluteFilePath(QStringLiteral("web"));
+        if (QFileInfo::exists(QDir(siblingWebRoot).filePath(QStringLiteral("index.html")))) {
+            return siblingWebRoot;
+        }
+    }
+
+    return localWebRoot;
 }
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END

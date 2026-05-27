@@ -1,5 +1,7 @@
 #pragma once
 
+#include "cloud_server_global.h"
+
 #include <QByteArray>
 #include <QObject>
 #include <QString>
@@ -9,7 +11,7 @@
 #include <functional>
 #include <memory>
 
-class AuthHttpClient : public QObject
+class CLOUD_SERVER_EXPORT AuthHttpClient : public QObject
 {
 public:
     /** 封装通用请求结果。 */
@@ -50,12 +52,22 @@ public:
                        const QString& targetFilePath,
                        int timeoutSec,
                        DownloadCallback callback);
+    /** 发送 multipart/form-data POST 请求上传文件。 */
+    void PostMultipartFile(const QString& path,
+                           const QString& bearerToken,
+                           const QString& fileFieldName,
+                           const QString& filePath,
+                           const QVariantMap& formFields,
+                           int timeoutSec,
+                           Callback callback);
     /** 取消当前全部未完成请求。 */
     void CancelAll();
 
 private:
     /** 保存服务端基础地址。 */
     QString                                _baseUrl;
+    /** 维护 Qt 网络请求管理器。 */
+    class QNetworkAccessManager*           _networkManager { nullptr };
     /** 维护请求取消代次计数。 */     
     std::shared_ptr<std::atomic<quint64>>  _cancelEpoch;        
 };

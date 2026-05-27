@@ -2,7 +2,10 @@
 
 #include "ultramill_global.h"
 #include <SARibbonBar/SARibbonMainWindow.h>
+#include <cloud_server/cloud_file_service.h>
 #include <cloud_server/user_auth_service.h>
+
+#include <QString>
 
 class QAction;
 class QMenu;
@@ -12,6 +15,7 @@ class QWidget;
 class FileManagerView;
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
+class CloudFileService;
 class DesktopWebServer;
 class TitleBarUserChip;
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END
@@ -30,6 +34,7 @@ public:
     ~NMainWindow() override;
 
     bool OpenFile(const QString& file_name, const QString& backup_file = "", bool silent = false);
+    bool SaveFile(bool silent = false);
     qianjizn::cloudserver::UserAuthService& UserAuth() { return _userAuth; }
     const qianjizn::cloudserver::UserAuthService& UserAuth() const { return _userAuth; }
 
@@ -58,13 +63,17 @@ private:
     void OnOpenFileManager();
     void OnOpenTeam();
     void OnShowToolLibDialog();
+    void SaveCloudFile();
     void OnOpen();
+    void OnSave();
     void OnNewProject();
 
     QAction* _actionDocument { nullptr };
     QAction* _actionNew { nullptr };
     QAction* _actionOpen { nullptr };
+    QAction* _actionSave { nullptr };
     qianjizn::cloudserver::UserAuthService _userAuth { qianjizn::cloudserver::CloudServerConfig {} };
+    qianjizn::cloudserver::CloudFileService* _cloudFileService { nullptr };
     qianjizn::cloudserver::DesktopWebServer* _desktopWebServer { nullptr };
     HomeWorkspace* _homeWorkspace { nullptr };
     FileManagerView* _fileManagerView { nullptr };

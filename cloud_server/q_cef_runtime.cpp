@@ -49,6 +49,10 @@ void QCefRuntime::InitConfig()
     const QString instanceCachePath = QDir(appLocalData).filePath(
         QStringLiteral("QJCAM/cef/%1-%2").arg(exeName, QString::number(QCoreApplication::applicationPid())));
 
+    if (!instanceCachePath.isEmpty()) {
+        QDir().mkpath(instanceCachePath);
+    }
+
     m_config.setResourceDirectoryPath(QDir(cefBundle).filePath(QStringLiteral("Resources")));
     m_config.setLocalesDirectoryPath(QDir(cefBundle).filePath(QStringLiteral("locales")));
     m_config.setCachePath(instanceCachePath);

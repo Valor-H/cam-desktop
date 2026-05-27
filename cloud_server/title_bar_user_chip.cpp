@@ -147,7 +147,11 @@ void TitleBarUserChip::ApplyAvatarIcon(const QPixmap& pixmap)
 
 void TitleBarUserChip::ApplyFallbackAvatar()
 {
-    ApplyAvatarIcon(MakeInitialAvatarWithRing(_fallbackNickName, _fallbackUserName));
+    if (_fallbackNickName.trimmed().isEmpty()) {
+        ApplyPendingProfileAvatar();
+        return;
+    }
+    ApplyAvatarIcon(MakeInitialAvatarWithRing(_fallbackNickName));
 }
 
 void TitleBarUserChip::SyncFromSession(const UserSession* session)
@@ -164,21 +168,29 @@ void TitleBarUserChip::SyncFromSession(const UserSession* session)
 void TitleBarUserChip::ApplyDefaultAvatar()
 {
     _fallbackNickName.clear();
-    _fallbackUserName.clear();
     const QPixmap ph = LoadAvatarRaster(kNeutralAvatarRes, TitleBarUserChip::kAvatarIconSide * 2);
     ApplyAvatarIcon(MakeCircularAvatar(ph));
     _avatarButton->setToolTip(tr("Not logged in"));
 }
 
+void TitleBarUserChip::ApplyPendingProfileAvatar()
+{
+    ApplyDefaultAvatar();
+    _avatarButton->setToolTip(QString());
+}
+
 void TitleBarUserChip::ApplyLoggedInAppearance(const UserSession* session)
 {
     const QVariantMap u = session->CurrentUser();
+    if (u.isEmpty()) {
+        ApplyPendingProfileAvatar();
+        return;
+    }
+
     const QString nick = u.value(QStringLiteral("nickName")).toString().trimmed();
-    const QString userName = u.value(QStringLiteral("userName")).toString().trimmed();
     _fallbackNickName = nick;
-    _fallbackUserName = userName;
     {
-        const QString tip = !nick.isEmpty() ? nick : userName;
+        const QString tip = !nick.isEmpty() ? nick : "None";
         _avatarButton->setToolTip(tip.trimmed().isEmpty() ? QString() : tip);
     }
 
@@ -216,23 +228,21 @@ QUrl TitleBarUserChip::ResolveAvatarUrl(const QString& raw) const
     return u;
 }
 
-QString TitleBarUserChip::PickInitialChar(const QString& nickName, const QString& userName)
+QString TitleBarUserChip::PickInitialChar(const QString& nickName)
 {
     const QString nick = nickName.trimmed();
-    const QString user = userName.trimmed();
-    QString seed = !nick.isEmpty() ? nick : user;
-    if (seed.isEmpty()) {
-        return QStringLiteral("?");
+    if (nick.isEmpty()) {
+        return QString();
     }
 
-    const QChar c = seed.at(0);
+    const QChar c = nick.at(0);
     if (c.isLetter() && c.unicode() <= 0x7F) {
         return QString(c.toUpper());
     }
     return QString(c);
 }
 
-QPixmap TitleBarUserChip::MakeInitialAvatarWithRing(const QString& nickName, const QString& userName) const
+QPixmap TitleBarUserChip::MakeInitialAvatarWithRing(const QString& nickName) const
 {
     const int side = TitleBarUserChip::kAvatarIconSide;
     QPixmap out(side, side);
@@ -249,7 +259,7 @@ QPixmap TitleBarUserChip::MakeInitialAvatarWithRing(const QString& nickName, con
     f.setPixelSize(11);
     painter.setFont(f);
     painter.setPen(QColor(Qt::white));
-    painter.drawText(QRect(0, 0, side, side), Qt::AlignCenter, PickInitialChar(nickName, userName));
+    painter.drawText(QRect(0, 0, side, side), Qt::AlignCenter, PickInitialChar(nickName));
     return out;
 }
 

@@ -44,7 +44,8 @@ cam-demo/
 cmake -S . -B build -G "Visual Studio 16 2019" -A x64
 cmake --build build --config Debug
 
-# 运行（产物位�?build/bin�?.\build\bin\CamDemo.exe
+# 运行（产物位于 x64/Debug，静态前端位于 x64/web）
+.\x64\Debug\qjcam.exe
 ```
 
 > 首次运行会生成本地设置（`QianJiZN / CamDemo`），并尝试启动本地前端桥接服务�?

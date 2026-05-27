@@ -55,12 +55,14 @@ private:
                                    const QByteArray& body);
     /** 应用默认头像显示。 */
     void ApplyDefaultAvatar();
+    /** 已登录但资料尚未拉取完成时应用中性默认头像。 */
+    void ApplyPendingProfileAvatar();
     /** 应用已登录状态外观。 */
     void ApplyLoggedInAppearance(const UserSession* session);
     /** 生成带圆环的默认头像。 */
-    QPixmap MakeInitialAvatarWithRing(const QString& nickName, const QString& userName) const;
+    QPixmap MakeInitialAvatarWithRing(const QString& nickName) const;
     /** 选取头像显示首字符。 */
-    static QString PickInitialChar(const QString& nickName, const QString& userName);
+    static QString PickInitialChar(const QString& nickName);
     /** 生成圆形头像图像。 */
     QPixmap MakeCircularAvatar(const QPixmap& source) const;
     /** 解析头像资源地址。 */
@@ -77,8 +79,6 @@ private:
     bool _loggedIn { false };
     /** 保存兜底昵称。 */
     QString _fallbackNickName;
-    /** 保存兜底用户名。 */
-    QString _fallbackUserName;
 };
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END

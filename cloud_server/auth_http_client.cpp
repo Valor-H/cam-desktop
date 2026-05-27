@@ -2,15 +2,24 @@
 
 #include <QCoreApplication>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMetaObject>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QHttpMultiPart>
+#include <QHttpPart>
+#include <QTimer>
+#include <QUrl>
 
 #include <hv/requests.h>
 
 AuthHttpClient::AuthHttpClient(const QString& baseUrl, QObject* parent)
     : QObject(parent)
     , _baseUrl(baseUrl)
+    , _networkManager(new QNetworkAccessManager(this))
     , _cancelEpoch(std::make_shared<std::atomic<quint64>>(0))
 {}
 
@@ -145,6 +154,111 @@ void AuthHttpClient::PostJsonToFile(
                 },
                 Qt::QueuedConnection);
         });
+}
+
+void AuthHttpClient::PostMultipartFile(
+    const QString& path,
+    const QString& bearerToken,
+    const QString& fileFieldName,
+    const QString& filePath,
+    const QVariantMap& formFields,
+    int timeoutSec,
+    Callback callback)
+{
+    const quint64 myEpoch = _cancelEpoch->load(std::memory_order_relaxed);
+    auto epochRef = _cancelEpoch;
+
+    QFileInfo fileInfo(filePath);
+    if (!fileInfo.exists() || !fileInfo.isFile()) {
+        QMetaObject::invokeMethod(
+            QCoreApplication::instance(),
+            [cb = std::move(callback)]() {
+                Response result;
+                result.bizMsg = QStringLiteral("upload source file is missing");
+                cb(result);
+            },
+            Qt::QueuedConnection);
+        return;
+    }
+
+    auto* multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+    for (auto it = formFields.constBegin(); it != formFields.constEnd(); ++it) {
+        QHttpPart textPart;
+        textPart.setHeader(
+            QNetworkRequest::ContentDispositionHeader,
+            QVariant(QStringLiteral("form-data; name=\"%1\"").arg(it.key())));
+        textPart.setBody(it.value().toString().toUtf8());
+        multiPart->append(textPart);
+    }
+
+    auto* file = new QFile(filePath, multiPart);
+    if (!file->open(QIODevice::ReadOnly)) {
+        multiPart->deleteLater();
+        QMetaObject::invokeMethod(
+            QCoreApplication::instance(),
+            [cb = std::move(callback)]() {
+                Response result;
+                result.bizMsg = QStringLiteral("failed to open upload source file");
+                cb(result);
+            },
+            Qt::QueuedConnection);
+        return;
+    }
+
+    QHttpPart filePart;
+    filePart.setHeader(
+        QNetworkRequest::ContentDispositionHeader,
+        QVariant(QStringLiteral("form-data; name=\"%1\"; filename=\"%2\"")
+                     .arg(fileFieldName, fileInfo.fileName())));
+    filePart.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/octet-stream")));
+    filePart.setBodyDevice(file);
+    multiPart->append(filePart);
+
+    QNetworkRequest request(QUrl(_baseUrl + path));
+    request.setRawHeader("Authorization", QStringLiteral("Bearer %1").arg(bearerToken).toUtf8());
+    request.setRawHeader("X-Client-Type", QByteArrayLiteral("desktop"));
+
+    QNetworkReply* reply = _networkManager->post(request, multiPart);
+    multiPart->setParent(reply);
+
+    auto* timeoutTimer = new QTimer(reply);
+    timeoutTimer->setSingleShot(true);
+    connect(timeoutTimer, &QTimer::timeout, reply, [reply]() {
+        if (reply->isRunning()) {
+            reply->abort();
+        }
+    });
+    timeoutTimer->start(timeoutSec * 1000);
+
+    connect(reply, &QNetworkReply::finished, this, [epochRef, myEpoch, reply, cb = std::move(callback)]() mutable {
+        const QByteArray body = reply->readAll();
+        const QVariant statusVariant = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+
+        Response result;
+        result.httpStatus = statusVariant.isValid() ? statusVariant.toInt() : 0;
+        result.networkOk = reply->error() == QNetworkReply::NoError;
+        if (!result.networkOk) {
+            result.bizMsg = reply->errorString();
+        }
+
+        const QJsonDocument doc = QJsonDocument::fromJson(body);
+        if (doc.isObject()) {
+            const QJsonObject root = doc.object();
+            result.bizCode = root.value(QStringLiteral("code")).toInt(-1);
+            result.bizMsg = root.value(QStringLiteral("msg")).toString(result.bizMsg);
+            const QJsonObject dataObj = root.value(QStringLiteral("data")).toObject();
+            if (!dataObj.isEmpty()) {
+                result.data = dataObj.toVariantMap();
+            }
+        }
+
+        reply->deleteLater();
+        if (epochRef->load(std::memory_order_relaxed) != myEpoch) {
+            return;
+        }
+
+        cb(result);
+    });
 }
 
 void AuthHttpClient::CancelAll()

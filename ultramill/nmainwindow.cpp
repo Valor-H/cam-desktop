@@ -44,13 +44,16 @@ NMainWindow::NMainWindow(QWidget* parent)
     _actionDocument = new QAction(QStringLiteral("Document"), this);
     _actionNew = new QAction(QIcon(), tr("New"), this);
     _actionOpen = new QAction(QIcon(), tr("Open"), this);
+    _actionSave = new QAction(QIcon(), tr("Save"), this);
 
     connect(_userAuth.Session(), &UserSession::AuthStateChanged, this, &NMainWindow::RefreshUserChipFromSession);
     connect(_userAuth.Session(), &UserSession::UserProfileChanged, this, &NMainWindow::RefreshUserChipFromSession);
     connect(_actionDocument, &QAction::triggered, this, &NMainWindow::OnShowDocumentOverlay);
     connect(_actionOpen, &QAction::triggered, this, &NMainWindow::OnOpen);
+    connect(_actionSave, &QAction::triggered, this, &NMainWindow::OnSave);
     connect(_actionNew, &QAction::triggered, this, &NMainWindow::OnNewProject);
 
+    _cloudFileService = new qianjizn::cloudserver::CloudFileService(&_userAuth, this);
     _desktopWebServer = new qianjizn::cloudserver::DesktopWebServer(&_userAuth, this);
     InitializeMainWindowShell();
 }
@@ -92,6 +95,15 @@ bool NMainWindow::OpenFile(const QString& file_name, const QString& backup_file,
     return true;
 }
 
+bool NMainWindow::SaveFile(bool silent)
+{
+    if (!silent && statusBar()) {
+        statusBar()->showMessage(tr("Save command requested."), 2000);
+    }
+
+    return true;
+}
+
 bool NMainWindow::event(QEvent* e)
 {
     if (e && e->type() == QEvent::WindowActivate) {
@@ -114,9 +126,6 @@ void NMainWindow::InitializeMainWindowShell()
     EnsureDesktopWebServerReady();
     RefreshUserChipFromSession();
     _userAuth.InitFromStoredToken();
-
-    const QUrl pageUrl = qianjizn::cloudserver::buildRecentFilesUrl(_userAuth.FrontendBaseUrl());
-    ShowFileManagerWorkspace(pageUrl);
     ShowHomeWorkspace();
 }
 
@@ -158,6 +167,7 @@ void NMainWindow::InitRibbonBar()
         quickAccessBar->addAction(_actionDocument);
         quickAccessBar->addAction(_actionNew);
         quickAccessBar->addAction(_actionOpen);
+        quickAccessBar->addAction(_actionSave);
     }
 
     const auto makeAction = [this](const QString& text, QStyle::StandardPixmap iconType) {
@@ -185,6 +195,7 @@ void NMainWindow::InitRibbonBar()
                   _actionDocument,
                   _actionNew,
                   _actionOpen,
+                  _actionSave,
               });
 
     SARibbonCategory* categoryHome = ribbonBarWidget->addCategoryPage(QStringLiteral("Home"));
@@ -355,11 +366,30 @@ void NMainWindow::ShowFileManagerWorkspace(const QUrl& pageUrl)
     }
 
     if (!_fileManagerView) {
-        _fileManagerView = new FileManagerView(this, &_userAuth, pageUrl);
+        _fileManagerView = new FileManagerView(this, &_userAuth, _cloudFileService, pageUrl);
         connect(_fileManagerView, &FileManagerView::OpenFileRequested, this, [this](const QString& filePath) {
             ShowHomeWorkspace();
-            OpenFile(filePath, QString(), false);
+            const bool opened = OpenFile(filePath, QString(), false);
+            if (!opened) {
+                return;
+            }
+            if (_cloudFileService) {
+                _cloudFileService->TrackOpenedLocalFile(filePath);
+            }
         });
+        connect(_fileManagerView,
+                &FileManagerView::OpenCloudFileRequested,
+                this,
+                [this](const QString& filePath, const QString& fileUuid) {
+                    ShowHomeWorkspace();
+                    const bool opened = OpenFile(filePath, QString(), false);
+                    if (!opened) {
+                        return;
+                    }
+                    if (_cloudFileService) {
+                        _cloudFileService->TrackOpenedCloudFile(filePath, fileUuid);
+                    }
+                });
         connect(_fileManagerView, &FileManagerView::OpenRequested, this, &NMainWindow::OnOpen);
         connect(_fileManagerView, &FileManagerView::NewProjectRequested, this, &NMainWindow::OnNewProject);
     } else {
@@ -413,10 +443,77 @@ void NMainWindow::OnShowToolLibDialog()
 void NMainWindow::OnOpen()
 {
     ShowHomeWorkspace();
-    OpenFile(QString(), QString(), false);
+    if (_cloudFileService) {
+        _cloudFileService->ClearCurrentFile();
+    }
+
+    if (!OpenFile(QString(), QString(), false)) {
+        return;
+    }
+
     if (statusBar()) {
         statusBar()->showMessage(tr("Open command requested."), 2000);
     }
+}
+
+void NMainWindow::SaveCloudFile()
+{
+    if (!_cloudFileService || !_cloudFileService->IsCurrentFileCloud()) {
+        if (statusBar()) {
+            statusBar()->showMessage(tr("Local file save completed."), 3000);
+        }
+        return;
+    }
+
+    if (_cloudFileService->SaveInFlight()) {
+        if (statusBar()) {
+            statusBar()->showMessage(tr("Cloud save is already running."), 2000);
+        }
+        return;
+    }
+
+    QString errorMessage;
+    const bool started = _cloudFileService->SaveCurrentCloudFile(
+        [this](const AuthHttpClient::Response& response) {
+            if (!response.networkOk) {
+                QMessageBox::warning(
+                    this,
+                    tr("Warning"),
+                    response.bizMsg.isEmpty() ? tr("Cloud file upload failed.") : response.bizMsg);
+                return;
+            }
+
+            if (response.httpStatus < 200 || response.httpStatus >= 300 || response.bizCode != 200) {
+                QMessageBox::warning(
+                    this,
+                    tr("Warning"),
+                    response.bizMsg.isEmpty() ? tr("Cloud file update was rejected.") : response.bizMsg);
+                return;
+            }
+
+            if (statusBar()) {
+                statusBar()->showMessage(tr("Cloud file saved."), 3000);
+            }
+        },
+        &errorMessage);
+
+    if (!started) {
+        QMessageBox::warning(this, tr("Warning"), errorMessage);
+        return;
+    }
+
+    if (statusBar()) {
+        statusBar()->showMessage(tr("Saving cloud file..."), 2000);
+    }
+}
+
+void NMainWindow::OnSave()
+{
+    if (!SaveFile(false)) {
+        return;
+    }
+
+    SaveCloudFile();
 }
 
 void NMainWindow::OnNewProject()

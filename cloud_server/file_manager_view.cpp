@@ -1,6 +1,5 @@
 #include "file_manager_view.h"
 
-#include "auth_http_client.h"
 #include "desktop_runtime_injection.h"
 #include "local_files_snapshot.h"
 #include "user_auth_service.h"
@@ -16,7 +15,6 @@
 #include <QLayout>
 #include <QPalette>
 #include <QPointer>
-#include <QRegularExpression>
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QSizePolicy>
@@ -36,7 +34,6 @@
 namespace
 {
 constexpr int kQjpFileType = 11;
-constexpr int kRecentFileDownloadTimeoutSec = 60;
 constexpr double kEmbeddedPageScale = 0.90;
 constexpr int kDesktopQueryErrorBusy = 409;
 constexpr int kDesktopQueryErrorBadRequest = 400;
@@ -62,17 +59,6 @@ QString apiBaseStringForClient(const QUrl& url)
     return baseUrl;
 }
 
-QString sanitizeFileSegment(QString value)
-{
-    value = value.trimmed();
-    if (value.isEmpty()) {
-        return QStringLiteral("recent-file");
-    }
-
-    value.replace(QRegularExpression(QStringLiteral("[^A-Za-z0-9._-]")), QStringLiteral("_"));
-    return value;
-}
-
 double zoomFactorToLevel(double factor)
 {
     if (factor <= 0.0 || qFuzzyCompare(factor, 1.0)) {
@@ -83,10 +69,14 @@ double zoomFactorToLevel(double factor)
 }
 }
 
-FileManagerView::FileManagerView(QWidget* parent, qianjizn::cloudserver::UserAuthService* authService, const QUrl& pageUrl)
+FileManagerView::FileManagerView(QWidget* parent,
+                                 qianjizn::cloudserver::UserAuthService* authService,
+                                 qianjizn::cloudserver::CloudFileService* cloudFileService,
+                                 const QUrl& pageUrl)
     : QWidget(parent)
     , m_pageUrl(pageUrl)
     , m_authService(authService)
+    , m_cloudFileService(cloudFileService)
 {
     setObjectName(QStringLiteral("embeddedFileManagerOverlay"));
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -144,6 +134,12 @@ FileManagerView::FileManagerView(QWidget* parent, qianjizn::cloudserver::UserAut
     });
     if (m_authService && m_authService->Session()) {
         connect(m_authService->Session(), &qianjizn::cloudserver::UserSession::AuthStateChanged, this, [this](bool) {
+            SyncAuthStateToWeb();
+            if (isVisible()) {
+                RefreshCurrentPage();
+            }
+        });
+        connect(m_authService->Session(), &qianjizn::cloudserver::UserSession::UserProfileChanged, this, [this]() {
             SyncAuthStateToWeb();
             if (isVisible()) {
                 RefreshCurrentPage();
@@ -514,53 +510,21 @@ bool FileManagerView::OpenRecentLocalFile(const QVariantMap& payload)
 
 void FileManagerView::OpenRecentCloudFile(const QVariantMap& payload, const QCefQuery* query)
 {
-    if (!m_authService) {
+    if (!m_cloudFileService) {
         if (query) {
             ReplyOpenRecentFileError(*query,
-                                     QStringLiteral("Desktop authentication service is unavailable."),
+                                     QStringLiteral("Desktop cloud file service is unavailable."),
                                      kDesktopQueryErrorInternal);
         }
         return;
     }
 
-    const QVariantMap currentUser = m_authService->Session()->CurrentUser();
-    const QString userUuid = currentUser.value(QStringLiteral("uuid")).toString().trimmed();
-    const QString token = m_authService->Session()->AuthToken().trimmed();
     const QString fileUuid = payload.value(QStringLiteral("fileUuid")).toString().trimmed();
-
-    if (token.isEmpty() || userUuid.isEmpty()) {
-        if (query) {
-            ReplyOpenRecentFileError(*query,
-                                     QStringLiteral("Current session is missing token or user UUID."),
-                                     kDesktopQueryErrorBadRequest);
-        }
-        return;
-    }
     if (fileUuid.isEmpty()) {
         if (query) {
             ReplyOpenRecentFileError(*query,
                                      QStringLiteral("Cloud recent file request is missing fileUuid."),
                                      kDesktopQueryErrorBadRequest);
-        }
-        return;
-    }
-
-    const QString cacheFilePath = BuildCacheFilePath(payload);
-    const QFileInfo cacheInfo(cacheFilePath);
-    QDir cacheDir(cacheInfo.dir());
-    if (!cacheDir.exists() && !cacheDir.mkpath(QStringLiteral("."))) {
-        if (query) {
-            ReplyOpenRecentFileError(*query, QStringLiteral("Failed to create cache directory."), kDesktopQueryErrorInternal);
-        }
-        return;
-    }
-
-    AuthHttpClient* httpClient = EnsureFileHttpClient();
-    if (!httpClient) {
-        if (query) {
-            ReplyOpenRecentFileError(*query,
-                                     QStringLiteral("Desktop download client initialization failed."),
-                                     kDesktopQueryErrorInternal);
         }
         return;
     }
@@ -577,56 +541,41 @@ void FileManagerView::OpenRecentCloudFile(const QVariantMap& payload, const QCef
         m_hasPendingOpenRecentFileQuery = true;
     }
 
-    QJsonObject requestBody {
-        { QStringLiteral("fileUuid"), fileUuid },
-        { QStringLiteral("UserUuid"), userUuid },
-    };
-
     QPointer<FileManagerView> self(this);
-    httpClient->PostJsonToFile(
-        QStringLiteral("/api/file/getFile"),
-        token,
-        QJsonDocument(requestBody).toJson(QJsonDocument::Compact),
-        cacheFilePath,
-        kRecentFileDownloadTimeoutSec,
-        [self](const AuthHttpClient::DownloadResponse& response) {
+    QString errorMessage;
+    const bool started = m_cloudFileService->OpenCloudFile(
+        fileUuid,
+        payload.value(QStringLiteral("fileName")).toString(),
+        [self](const QString& localFilePath, const QString& openedFileUuid, const QString& openErrorMessage) {
             if (!self) {
                 return;
             }
 
-            if (!response.networkOk) {
-                QFile::remove(response.targetFilePath);
+            if (!openErrorMessage.isEmpty()) {
                 if (self->m_hasPendingOpenRecentFileQuery) {
                     const QCefQuery query = self->m_pendingOpenRecentFileQuery;
                     self->m_hasPendingOpenRecentFileQuery = false;
                     self->ReplyOpenRecentFileError(
                         query,
-                        QStringLiteral("Cloud file download failed: %1").arg(response.errorMessage),
+                        openErrorMessage,
                         kDesktopQueryErrorInternal);
                 }
                 return;
             }
 
-            if (!response.writeOk) {
-                QFile::remove(response.targetFilePath);
-                if (self->m_hasPendingOpenRecentFileQuery) {
-                    const QCefQuery query = self->m_pendingOpenRecentFileQuery;
-                    self->m_hasPendingOpenRecentFileQuery = false;
-                    self->ReplyOpenRecentFileError(
-                        query,
-                        QStringLiteral("Cloud file cache write failed: %1").arg(response.errorMessage),
-                        kDesktopQueryErrorInternal);
-                }
-                return;
-            }
-
-            emit self->OpenFileRequested(response.targetFilePath);
+            emit self->OpenCloudFileRequested(localFilePath, openedFileUuid);
             if (self->m_hasPendingOpenRecentFileQuery) {
                 const QCefQuery query = self->m_pendingOpenRecentFileQuery;
                 self->m_hasPendingOpenRecentFileQuery = false;
-                self->ReplyOpenRecentFileSuccess(query, response.targetFilePath);
+                self->ReplyOpenRecentFileSuccess(query, localFilePath);
             }
-        });
+        },
+        &errorMessage);
+
+    if (!started && query) {
+        m_hasPendingOpenRecentFileQuery = false;
+        ReplyOpenRecentFileError(*query, errorMessage, kDesktopQueryErrorBadRequest);
+    }
 }
 
 QString FileManagerView::ResolveRecentLocalPath(const QVariantMap& payload) const
@@ -642,22 +591,6 @@ QString FileManagerView::ResolveRecentLocalPath(const QVariantMap& payload) cons
     }
 
     return QString();
-}
-
-QString FileManagerView::BuildCacheFilePath(const QVariantMap& payload) const
-{
-    const QString fileName = payload.value(QStringLiteral("fileName")).toString().trimmed();
-    QString candidate = sanitizeFileSegment(fileName);
-    if (!candidate.endsWith(QStringLiteral(".qjp"), Qt::CaseInsensitive)) {
-        const QString fileUuid = sanitizeFileSegment(payload.value(QStringLiteral("fileUuid")).toString());
-        candidate = fileUuid.isEmpty() ? candidate : fileUuid;
-        if (!candidate.endsWith(QStringLiteral(".qjp"), Qt::CaseInsensitive)) {
-            candidate += QStringLiteral(".qjp");
-        }
-    }
-
-    return QDir::fromNativeSeparators(QStringLiteral(CAMDEMO_RECENT_FILE_CACHE_DIR))
-        + QLatin1Char('/') + candidate;
 }
 
 bool FileManagerView::IsDesktopRecentRequest(const QVariantMap& payload) const
@@ -701,16 +634,3 @@ void FileManagerView::ReplyOpenRecentFileSuccess(const QCefQuery& query, const Q
     m_view->responseQCefQuery(successQuery);
 }
 
-AuthHttpClient* FileManagerView::EnsureFileHttpClient()
-{
-    if (m_fileHttpClient) {
-        return m_fileHttpClient;
-    }
-
-    if (!m_authService) {
-        return nullptr;
-    }
-
-    m_fileHttpClient = new AuthHttpClient(apiBaseStringForClient(m_authService->ApiBaseUrl()), this);
-    return m_fileHttpClient;
-}

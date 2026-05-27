@@ -38,9 +38,14 @@ if(MSVC)
     target_compile_options(cloud_server PRIVATE /utf-8)
 endif()
 
+add_custom_command(TARGET cloud_server POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<$<CONFIG:Debug>:${VCPKG_OPENSSL_DLL_DEBUG_DIR}/libcrypto-3-x64.dll>$<$<NOT:$<CONFIG:Debug>>:${VCPKG_OPENSSL_DLL_RELEASE_DIR}/libcrypto-3-x64.dll>" "$<TARGET_FILE_DIR:cloud_server>"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<$<CONFIG:Debug>:${VCPKG_OPENSSL_DLL_DEBUG_DIR}/libssl-3-x64.dll>$<$<NOT:$<CONFIG:Debug>>:${VCPKG_OPENSSL_DLL_RELEASE_DIR}/libssl-3-x64.dll>" "$<TARGET_FILE_DIR:cloud_server>"
+)
+
 set_target_properties(cloud_server PROPERTIES
     DEBUG_POSTFIX "_d"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    RUNTIME_OUTPUT_DIRECTORY "${CAMDEMO_RUNTIME_OUTPUT_DIRECTORY}"
+    VS_GLOBAL_VcpkgApplocalDeps "false"
 )
