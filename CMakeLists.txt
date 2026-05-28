@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.19)
 
 if(CMAKE_GENERATOR MATCHES "Visual Studio")
     set(CMAKE_GENERATOR_TOOLSET "v142" CACHE STRING "Platform Toolset" FORCE)
+    set(CMAKE_VS_GLOBALS "VcpkgEnabled=false;VcpkgApplocalDeps=false" CACHE STRING "Visual Studio globals" FORCE)
 endif()
 
 project(CamDemo VERSION 0.1 LANGUAGES CXX)
@@ -12,15 +13,15 @@ set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CAMDEMO_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/x64")
-set(VCPKG_ROOT "D:/Tools/vcpkg")
-set(VCPKG_TRIPLET "x64-windows")
-set(VCPKG_RELEASE_BIN_DIR "${VCPKG_ROOT}/installed/${VCPKG_TRIPLET}/bin")
-set(VCPKG_DEBUG_BIN_DIR "${VCPKG_ROOT}/installed/${VCPKG_TRIPLET}/debug/bin")
-set(VCPKG_OPENSSL_DLL_DEBUG_DIR "${VCPKG_DEBUG_BIN_DIR}")
-set(VCPKG_OPENSSL_DLL_RELEASE_DIR "${VCPKG_RELEASE_BIN_DIR}")
 
 # 1. Qt
-set(CMAKE_PREFIX_PATH "D:/Tools/Qt/5.15.2/msvc2019_64")
+set(QT_ROOT "D:/Tools/QT5/5.15.2/msvc2019_64")
+set(QT_BIN_DIR "${QT_ROOT}/bin")
+set(QT_WINDEPLOYQT_EXECUTABLE "${QT_BIN_DIR}/windeployqt.exe")
+set(CMAKE_PREFIX_PATH "${QT_ROOT}")
+if(NOT EXISTS "${QT_WINDEPLOYQT_EXECUTABLE}")
+    message(FATAL_ERROR "windeployqt.exe not found under ${QT_BIN_DIR}")
+endif()
 find_package(Qt5 COMPONENTS Core Gui Widgets Network Concurrent REQUIRED)
 
 # 2. QCefView
