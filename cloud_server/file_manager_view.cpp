@@ -44,6 +44,7 @@ const QString kMethodRequestOpenRecentFile = QStringLiteral("Desktop.RequestOpen
 const QString kMethodRequestOpenFile = QStringLiteral("Desktop.RequestOpenFile");
 const QString kMethodRequestOpen = QStringLiteral("Desktop.RequestOpen");
 const QString kMethodRequestNewProject = QStringLiteral("Desktop.RequestNewProject");
+const QString kMethodRequestReturnToWorkspace = QStringLiteral("Desktop.RequestReturnToWorkspace");
 const QString kEventDesktopOnResume = QStringLiteral("Desktop.OnResume");
 
 #ifndef CAMDEMO_RECENT_FILE_CACHE_DIR
@@ -367,6 +368,14 @@ void FileManagerView::OnCefQueryRequest(const QCefQuery& query)
 
     if (method == kMethodRequestNewProject) {
         emit NewProjectRequested();
+        QCefQuery successQuery = query;
+        successQuery.reply(true, QStringLiteral("{}"));
+        m_view->responseQCefQuery(successQuery);
+        return;
+    }
+
+    if (method == kMethodRequestReturnToWorkspace) {
+        emit ReturnToWorkspaceRequested();
         QCefQuery successQuery = query;
         successQuery.reply(true, QStringLiteral("{}"));
         m_view->responseQCefQuery(successQuery);

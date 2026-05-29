@@ -57,7 +57,7 @@ QJsonObject toFileInfoObject(const QFileInfo& info)
         { QStringLiteral("fileName"), info.fileName() },
         { QStringLiteral("fileType"), kQjpFileType },
         { QStringLiteral("fileUuid"), QStringLiteral("local::") + toNativeFilePath(info) },
-        { QStringLiteral("lastModified"), info.lastModified().toString(Qt::ISODate) },
+        { QStringLiteral("lastModified"), info.lastModified().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")) },
         { QStringLiteral("link"), QJsonValue::Null },
         { QStringLiteral("owner"), QJsonValue::Null },
         { QStringLiteral("startTime"), QJsonValue::Null },

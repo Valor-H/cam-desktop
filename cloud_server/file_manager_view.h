@@ -63,6 +63,8 @@ signals:
     void OpenRequested();
     /** 请求新建项目。 */
     void NewProjectRequested();
+    /** 请求返回桌面工作台。 */
+    void ReturnToWorkspaceRequested();
 
 private:
     /** 应用嵌入视图缩放参数。 */

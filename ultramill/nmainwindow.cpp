@@ -62,9 +62,9 @@ NMainWindow::~NMainWindow() = default;
 
 void NMainWindow::ApplyWindowPresentation()
 {
-    setWindowTitle(tr("CamDemo"));
+    setWindowTitle(tr("QJCAM DEMO"));
     setWindowIcon(QIcon(QStringLiteral(":/qjcam/resource/logo.ico")));
-    setMinimumSize(1000, 800);
+    setMinimumSize(600, 400);
 }
 
 bool NMainWindow::EnsureDesktopWebServerReady(bool showWarning)
@@ -127,7 +127,7 @@ void NMainWindow::InitializeMainWindowShell()
     EnsureDesktopWebServerReady();
     RefreshUserChipFromSession();
     _userAuth.InitFromStoredToken();
-    ShowHomeWorkspace();
+    HideFileManagerView();
 }
 
 void NMainWindow::InitCentralWorkspace()
@@ -283,6 +283,8 @@ void NMainWindow::UpdateFileManagerOverlayGeometry()
         return;
     }
 
+    constexpr int kOverlayResizeBorder = 2;
+
     int overlayTop = 0;
     if (SARibbonSystemButtonBar* bar = windowButtonBar()) {
         overlayTop = bar->geometry().bottom() + 1;
@@ -291,10 +293,12 @@ void NMainWindow::UpdateFileManagerOverlayGeometry()
         }
     }
 
-    overlayTop = qMax(0, overlayTop);
-    const int overlayHeight = qMax(0, height() - overlayTop);
-    const QPoint topLeft = mapToGlobal(QPoint(0, overlayTop));
-    _fileManagerView->setGeometry(QRect(topLeft, QSize(width(), overlayHeight)));
+    overlayTop = qMax(0, overlayTop) + kOverlayResizeBorder;
+    const int overlayLeft = kOverlayResizeBorder;
+    const int overlayWidth = qMax(0, width() - kOverlayResizeBorder * 2);
+    const int overlayHeight = qMax(0, height() - overlayTop - kOverlayResizeBorder);
+    const QPoint topLeft = mapToGlobal(QPoint(overlayLeft, overlayTop));
+    _fileManagerView->setGeometry(QRect(topLeft, QSize(overlayWidth, overlayHeight)));
 }
 
 void NMainWindow::OnShowAccountAuthDialog()
@@ -354,7 +358,7 @@ void NMainWindow::OnOpenFileManager()
     ShowFileManagerWorkspace(pageUrl);
 }
 
-void NMainWindow::ShowHomeWorkspace()
+void NMainWindow::HideFileManagerView()
 {
     if (_fileManagerView) {
         _fileManagerView->hide();
@@ -370,7 +374,7 @@ void NMainWindow::ShowFileManagerWorkspace(const QUrl& pageUrl)
     if (!_fileManagerView) {
         _fileManagerView = new FileManagerView(this, &_userAuth, _cloudFileService, pageUrl);
         connect(_fileManagerView, &FileManagerView::OpenFileRequested, this, [this](const QString& filePath) {
-            ShowHomeWorkspace();
+            HideFileManagerView();
             const bool opened = OpenFile(filePath, QString(), false);
             if (!opened) {
                 return;
@@ -383,7 +387,7 @@ void NMainWindow::ShowFileManagerWorkspace(const QUrl& pageUrl)
                 &FileManagerView::OpenCloudFileRequested,
                 this,
                 [this](const QString& filePath, const QString& fileUuid) {
-                    ShowHomeWorkspace();
+                    HideFileManagerView();
                     const bool opened = OpenFile(filePath, QString(), false);
                     if (!opened) {
                         return;
@@ -394,6 +398,7 @@ void NMainWindow::ShowFileManagerWorkspace(const QUrl& pageUrl)
                 });
         connect(_fileManagerView, &FileManagerView::OpenRequested, this, &NMainWindow::OnOpen);
         connect(_fileManagerView, &FileManagerView::NewProjectRequested, this, &NMainWindow::OnNewProject);
+        connect(_fileManagerView, &FileManagerView::ReturnToWorkspaceRequested, this, &NMainWindow::HideFileManagerView);
     } else {
         _fileManagerView->RefreshCurrentPage();
     }
@@ -408,7 +413,7 @@ void NMainWindow::ShowFileManagerWorkspace(const QUrl& pageUrl)
 void NMainWindow::OnShowDocumentOverlay()
 {
     if (_fileManagerView && _fileManagerView->isVisible()) {
-        ShowHomeWorkspace();
+        HideFileManagerView();
         return;
     }
 
@@ -444,7 +449,7 @@ void NMainWindow::OnShowToolLibDialog()
 
 void NMainWindow::OnOpen()
 {
-    ShowHomeWorkspace();
+    HideFileManagerView();
     if (_cloudFileService) {
         _cloudFileService->ClearCurrentFile();
     }
@@ -520,7 +525,7 @@ void NMainWindow::OnSave()
 
 void NMainWindow::OnNewProject()
 {
-    ShowHomeWorkspace();
+    HideFileManagerView();
     const QString program = QCoreApplication::applicationFilePath();
     const bool started = QProcess::startDetached(program, QStringList {}, QCoreApplication::applicationDirPath());
     if (statusBar()) {

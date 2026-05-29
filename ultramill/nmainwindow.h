@@ -51,7 +51,7 @@ private:
     void InitRibbonBar();
     void InitUserChip();
     void InitCentralWorkspace();
-    void ShowHomeWorkspace();
+    void HideFileManagerView();
     void ShowFileManagerWorkspace(const QUrl& pageUrl);
     void UpdateFileManagerOverlayGeometry();
     void SyncUserChipIntoTitleBar();
