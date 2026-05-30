@@ -130,7 +130,7 @@ bool CloudFileService::OpenCloudFile(const QString& fileUuid,
     };
 
     httpClient->PostJsonToFile(
-        QStringLiteral("/api/file/getFileRaw"),
+        QStringLiteral("/api/file/getFile"),
         token,
         QJsonDocument(requestBody).toJson(QJsonDocument::Compact),
         cacheFilePath,

@@ -1,38 +1,21 @@
 #include "nmainwindow.h"
+#include "cloud_controller.h"
 #include "home_workspace.h"
 #include "tool_lib_dialog.h"
 
-#include <cloud_server/desktop_web_server.h>
-#include <cloud_server/desktop_web.h>
-#include <cloud_server/file_manager_view.h>
 #include <SARibbonBar/SARibbonBar.h>
 #include <SARibbonBar/SARibbonCategory.h>
 #include <SARibbonBar/SARibbonPanel.h>
 #include <SARibbonBar/SARibbonQuickAccessBar.h>
-#include <SARibbonBar/SARibbonSystemButtonBar.h>
-#include <SARibbonBar/SARibbonTabBar.h>
-#include <SARibbonBar/SARibbonTitleIconWidget.h>
-#include <cloud_server/title_bar_user_chip.h>
 
-#include <QAbstractButton>
 #include <QAction>
-#include <QDebug>
-#include <QDesktopServices>
+#include <QCoreApplication>
 #include <QEvent>
 #include <QIcon>
-#include <QMenu>
 #include <QMessageBox>
 #include <QProcess>
-#include <QSizePolicy>
 #include <QStatusBar>
 #include <QStyle>
-#include <QTimer>
-#include <QWidget>
-
-#include <QCefContext.h>
-#include <QCefView.h>
-
-using qianjizn::cloudserver::UserSession;
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
@@ -45,20 +28,26 @@ NMainWindow::NMainWindow(QWidget* parent)
     _actionNew = new QAction(QIcon(), tr("New"), this);
     _actionOpen = new QAction(QIcon(), tr("Open"), this);
     _actionSave = new QAction(QIcon(), tr("Save"), this);
-
-    connect(_userAuth.Session(), &UserSession::AuthStateChanged, this, &NMainWindow::RefreshUserChipFromSession);
-    connect(_userAuth.Session(), &UserSession::UserProfileChanged, this, &NMainWindow::RefreshUserChipFromSession);
-    connect(_actionDocument, &QAction::triggered, this, &NMainWindow::OnShowDocumentOverlay);
     connect(_actionOpen, &QAction::triggered, this, &NMainWindow::OnOpen);
     connect(_actionSave, &QAction::triggered, this, &NMainWindow::OnSave);
     connect(_actionNew, &QAction::triggered, this, &NMainWindow::OnNewProject);
 
-    _cloudFileService = new qianjizn::cloudserver::CloudFileService(&_userAuth, this);
-    _desktopWebServer = new qianjizn::cloudserver::DesktopWebServer(&_userAuth, this);
+    InitCloudController();
+
     InitializeMainWindowShell();
 }
 
 NMainWindow::~NMainWindow() = default;
+
+qianjizn::cloudserver::UserAuthService& NMainWindow::UserAuth()
+{
+    return _cloudController->UserAuth();
+}
+
+const qianjizn::cloudserver::UserAuthService& NMainWindow::UserAuth() const
+{
+    return _cloudController->UserAuth();
+}
 
 void NMainWindow::ApplyWindowPresentation()
 {
@@ -67,24 +56,16 @@ void NMainWindow::ApplyWindowPresentation()
     setMinimumSize(600, 400);
 }
 
-bool NMainWindow::EnsureDesktopWebServerReady(bool showWarning)
+void NMainWindow::InitCloudController()
 {
-    if (!_desktopWebServer) {
-        if (showWarning) {
-            QMessageBox::warning(this, tr("Warning"), tr("Local embedded web server is unavailable."));
-        }
-        return false;
+    if (_cloudController) {
+        return;
     }
 
-    if (!_desktopWebServer->Start()) {
-        if (showWarning) {
-            QMessageBox::warning(this, tr("Warning"), tr("Local embedded web server failed to start."));
-        }
-        return false;
-    }
-
-    _userAuth.SetFrontendBaseUrl(_desktopWebServer->BaseUrl());
-    return true;
+    _cloudController = new CloudController(this);
+    connect(_actionDocument, &QAction::triggered, _cloudController, &CloudController::ToggleDocumentOverlay);
+    connect(_cloudController, &CloudController::OpenRequested, this, &NMainWindow::OnOpen);
+    connect(_cloudController, &CloudController::NewProjectRequested, this, &NMainWindow::OnNewProject);
 }
 
 bool NMainWindow::OpenFile(const QString& file_name, const QString& backup_file, bool silent)
@@ -106,15 +87,8 @@ bool NMainWindow::SaveFile(bool silent)
 
 bool NMainWindow::event(QEvent* e)
 {
-    if (e && e->type() == QEvent::WindowActivate) {
-        _userAuth.OnWindowActivateEvent();
-        if (_fileManagerView && _fileManagerView->isVisible()) {
-            _fileManagerView->RefreshCurrentPage();
-        }
-    }
-    if (e && (e->type() == QEvent::Move || e->type() == QEvent::Resize || e->type() == QEvent::LayoutRequest
-              || e->type() == QEvent::Show)) {
-        UpdateFileManagerOverlayGeometry();
+    if (_cloudController) {
+        _cloudController->HandleMainWindowEvent(e);
     }
     return SARibbonMainWindow::event(e);
 }
@@ -122,12 +96,10 @@ bool NMainWindow::event(QEvent* e)
 void NMainWindow::InitializeMainWindowShell()
 {
     InitRibbonBar();
-    InitUserChip();
     InitCentralWorkspace();
-    EnsureDesktopWebServerReady();
-    RefreshUserChipFromSession();
-    _userAuth.InitFromStoredToken();
-    HideFileManagerView();
+    if (_cloudController) {
+        _cloudController->Initialize();
+    }
 }
 
 void NMainWindow::InitCentralWorkspace()
@@ -141,17 +113,6 @@ void NMainWindow::InitCentralWorkspace()
     connect(_homeWorkspace, &HomeWorkspace::ToolLibRequested, this, &NMainWindow::OnShowToolLibDialog);
 
     setCentralWidget(_homeWorkspace);
-}
-
-void NMainWindow::RefreshUserChipFromSession()
-{
-    if (!_userChip) {
-        return;
-    }
-
-    _userChip->SyncFromSession(_userAuth.Session());
-    SyncUserChipIntoTitleBar();
-    QTimer::singleShot(0, this, [this]() { SyncUserChipIntoTitleBar(); });
 }
 
 void NMainWindow::InitRibbonBar()
@@ -218,223 +179,6 @@ void NMainWindow::InitRibbonBar()
     ribbonBarWidget->setCurrentIndex(ribbonBarWidget->categoryIndex(categoryHome));
 }
 
-void NMainWindow::InitUserChip()
-{
-    if (_userChip) {
-        return;
-    }
-
-    SARibbonSystemButtonBar* bar = windowButtonBar();
-    if (!bar) {
-        return;
-    }
-
-    QWidget* spacer = new QWidget(bar);
-    spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    bar->addWidget(spacer);
-
-    _userChip = new qianjizn::cloudserver::TitleBarUserChip(bar, _userAuth.ApiBaseUrl());
-    bar->addWidget(_userChip);
-
-    QTimer::singleShot(0, this, [this]() { SyncUserChipIntoTitleBar(); });
-
-    _loginMenu = new QMenu(this);
-    _personalCenterAction = _loginMenu->addAction(tr("Personal center"));
-    _teamAction = _loginMenu->addAction(QStringLiteral("Team Management"));
-    _logoutAction = _loginMenu->addAction(tr("Log out"));
-
-    connect(_logoutAction, &QAction::triggered, this, &NMainWindow::OnLogout);
-    connect(_personalCenterAction, &QAction::triggered, this, &NMainWindow::OnOpenPersonalProfile, Qt::UniqueConnection);
-    connect(_teamAction, &QAction::triggered, this, &NMainWindow::OnOpenTeam, Qt::UniqueConnection);
-
-    connect(_userChip, &qianjizn::cloudserver::TitleBarUserChip::loginRequested, this, &NMainWindow::OnShowAccountAuthDialog);
-    connect(
-        _userChip, &qianjizn::cloudserver::TitleBarUserChip::accountMenuRequested, this, &NMainWindow::OnShowAccountMenu);
-}
-
-void NMainWindow::SyncUserChipIntoTitleBar()
-{
-    if (!_userChip) {
-        return;
-    }
-
-    SARibbonSystemButtonBar* bar = windowButtonBar();
-    if (!bar) {
-        return;
-    }
-
-    int rowH = bar->windowTitleHeight();
-    if (QAbstractButton* minBtn = bar->minimizeButton()) {
-        const int mh = minBtn->height();
-        if (mh > 0) {
-            rowH = mh;
-        }
-    }
-
-    const int minH = qianjizn::cloudserver::TitleBarUserChip::kAvatarButtonSide;
-    const int h = rowH > 0 ? qMax(rowH, minH) : minH;
-    _userChip->setFixedHeight(h);
-    _userChip->RelayoutInParent();
-}
-
-void NMainWindow::UpdateFileManagerOverlayGeometry()
-{
-    if (!_fileManagerView) {
-        return;
-    }
-
-    constexpr int kOverlayResizeBorder = 2;
-
-    int overlayTop = 0;
-    if (SARibbonSystemButtonBar* bar = windowButtonBar()) {
-        overlayTop = bar->geometry().bottom() + 1;
-        if (overlayTop <= 0) {
-            overlayTop = bar->windowTitleHeight();
-        }
-    }
-
-    overlayTop = qMax(0, overlayTop) + kOverlayResizeBorder;
-    const int overlayLeft = kOverlayResizeBorder;
-    const int overlayWidth = qMax(0, width() - kOverlayResizeBorder * 2);
-    const int overlayHeight = qMax(0, height() - overlayTop - kOverlayResizeBorder);
-    const QPoint topLeft = mapToGlobal(QPoint(overlayLeft, overlayTop));
-    _fileManagerView->setGeometry(QRect(topLeft, QSize(overlayWidth, overlayHeight)));
-}
-
-void NMainWindow::OnShowAccountAuthDialog()
-{
-    if (!QCefContext::instance()) {
-        QMessageBox::warning(this, tr("Warning"), tr("Browser runtime is not ready yet. Please try again."));
-        return;
-    }
-
-    if (!EnsureDesktopWebServerReady()) {
-        return;
-    }
-    _userAuth.ShowAccountAuthDialog(this);
-}
-
-void NMainWindow::OnShowAccountMenu()
-{
-    if (!_userChip || !_loginMenu) {
-        return;
-    }
-
-    const QPoint pos = _userChip->mapToGlobal(QPoint(0, _userChip->height()));
-    _loginMenu->popup(pos);
-}
-
-void NMainWindow::OnLogout()
-{
-    _userAuth.Logout();
-}
-
-void NMainWindow::OnOpenPersonalProfile()
-{
-    _userAuth.BuildExternalWebSsoUrl(QStringLiteral("/personal-profile"),
-        [this](const QUrl& url, const QString& errorMessage) {
-            if (!errorMessage.isEmpty() || !url.isValid()) {
-                QMessageBox::warning(
-                    this,
-                    tr("Warning"),
-                    errorMessage.isEmpty() ? tr("Failed to open personal center.") : errorMessage);
-                return;
-            }
-            QDesktopServices::openUrl(url);
-        });
-}
-
-void NMainWindow::OnOpenFileManager()
-{
-    if (!EnsureDesktopWebServerReady()) {
-        return;
-    }
-
-    if (!_homeWorkspace) {
-        InitCentralWorkspace();
-    }
-
-    const QUrl pageUrl = qianjizn::cloudserver::buildRecentFilesUrl(_userAuth.FrontendBaseUrl());
-    ShowFileManagerWorkspace(pageUrl);
-}
-
-void NMainWindow::HideFileManagerView()
-{
-    if (_fileManagerView) {
-        _fileManagerView->hide();
-    }
-}
-
-void NMainWindow::ShowFileManagerWorkspace(const QUrl& pageUrl)
-{
-    if (!_homeWorkspace) {
-        return;
-    }
-
-    if (!_fileManagerView) {
-        _fileManagerView = new FileManagerView(this, &_userAuth, _cloudFileService, pageUrl);
-        connect(_fileManagerView, &FileManagerView::OpenFileRequested, this, [this](const QString& filePath) {
-            HideFileManagerView();
-            const bool opened = OpenFile(filePath, QString(), false);
-            if (!opened) {
-                return;
-            }
-            if (_cloudFileService) {
-                _cloudFileService->TrackOpenedLocalFile(filePath);
-            }
-        });
-        connect(_fileManagerView,
-                &FileManagerView::OpenCloudFileRequested,
-                this,
-                [this](const QString& filePath, const QString& fileUuid) {
-                    HideFileManagerView();
-                    const bool opened = OpenFile(filePath, QString(), false);
-                    if (!opened) {
-                        return;
-                    }
-                    if (_cloudFileService) {
-                        _cloudFileService->TrackOpenedCloudFile(filePath, fileUuid);
-                    }
-                });
-        connect(_fileManagerView, &FileManagerView::OpenRequested, this, &NMainWindow::OnOpen);
-        connect(_fileManagerView, &FileManagerView::NewProjectRequested, this, &NMainWindow::OnNewProject);
-        connect(_fileManagerView, &FileManagerView::ReturnToWorkspaceRequested, this, &NMainWindow::HideFileManagerView);
-    } else {
-        _fileManagerView->RefreshCurrentPage();
-    }
-
-    UpdateFileManagerOverlayGeometry();
-    _fileManagerView->SyncViewportGeometryNow();
-    _fileManagerView->show();
-    _fileManagerView->raise();
-    _fileManagerView->SyncViewportGeometryNow();
-}
-
-void NMainWindow::OnShowDocumentOverlay()
-{
-    if (_fileManagerView && _fileManagerView->isVisible()) {
-        HideFileManagerView();
-        return;
-    }
-
-    OnOpenFileManager();
-}
-
-void NMainWindow::OnOpenTeam()
-{
-    _userAuth.BuildExternalWebSsoUrl(QStringLiteral("/team"),
-        [this](const QUrl& url, const QString& errorMessage) {
-            if (!errorMessage.isEmpty() || !url.isValid()) {
-                QMessageBox::warning(
-                    this,
-                    tr("Warning"),
-                    errorMessage.isEmpty() ? tr("Failed to open team page.") : errorMessage);
-                return;
-            }
-            QDesktopServices::openUrl(url);
-        });
-}
-
 void NMainWindow::OnShowToolLibDialog()
 {
     if (!_toolLibDialog) {
@@ -449,9 +193,8 @@ void NMainWindow::OnShowToolLibDialog()
 
 void NMainWindow::OnOpen()
 {
-    HideFileManagerView();
-    if (_cloudFileService) {
-        _cloudFileService->ClearCurrentFile();
+    if (_cloudController) {
+        _cloudController->PrepareForLocalOpen();
     }
 
     if (!OpenFile(QString(), QString(), false)) {
@@ -463,69 +206,22 @@ void NMainWindow::OnOpen()
     }
 }
 
-void NMainWindow::SaveCloudFile()
-{
-    if (!_cloudFileService || !_cloudFileService->IsCurrentFileCloud()) {
-        if (statusBar()) {
-            statusBar()->showMessage(tr("Local file save completed."), 3000);
-        }
-        return;
-    }
-
-    if (_cloudFileService->SaveInFlight()) {
-        if (statusBar()) {
-            statusBar()->showMessage(tr("Cloud save is already running."), 2000);
-        }
-        return;
-    }
-
-    QString errorMessage;
-    const bool started = _cloudFileService->SaveCurrentCloudFile(
-        [this](const AuthHttpClient::Response& response) {
-            if (!response.networkOk) {
-                QMessageBox::warning(
-                    this,
-                    tr("Warning"),
-                    response.bizMsg.isEmpty() ? tr("Cloud file upload failed.") : response.bizMsg);
-                return;
-            }
-
-            if (response.httpStatus < 200 || response.httpStatus >= 300 || response.bizCode != 200) {
-                QMessageBox::warning(
-                    this,
-                    tr("Warning"),
-                    response.bizMsg.isEmpty() ? tr("Cloud file update was rejected.") : response.bizMsg);
-                return;
-            }
-
-            if (statusBar()) {
-                statusBar()->showMessage(tr("Cloud file saved."), 3000);
-            }
-        },
-        &errorMessage);
-
-    if (!started) {
-        QMessageBox::warning(this, tr("Warning"), errorMessage);
-        return;
-    }
-
-    if (statusBar()) {
-        statusBar()->showMessage(tr("Saving cloud file..."), 2000);
-    }
-}
-
 void NMainWindow::OnSave()
 {
     if (!SaveFile(false)) {
         return;
     }
 
-    SaveCloudFile();
+    if (_cloudController) {
+        _cloudController->SaveCloudFileIfNeeded();
+    }
 }
 
 void NMainWindow::OnNewProject()
 {
-    HideFileManagerView();
+    if (_cloudController) {
+        _cloudController->HideFileManagerView();
+    }
     const QString program = QCoreApplication::applicationFilePath();
     const bool started = QProcess::startDetached(program, QStringList {}, QCoreApplication::applicationDirPath());
     if (statusBar()) {

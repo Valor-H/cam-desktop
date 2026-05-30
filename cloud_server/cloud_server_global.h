@@ -3,6 +3,7 @@
 #ifndef CLOUD_SERVER_GLOBAL_H
 #define CLOUD_SERVER_GLOBAL_H
 
+#include <common/namespace/qj_namespace_def.h>
 #include <QtCore/qglobal.h>
 
 

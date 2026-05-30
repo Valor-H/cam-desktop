@@ -2,28 +2,22 @@
 
 #include "ultramill_global.h"
 #include <SARibbonBar/SARibbonMainWindow.h>
-#include <cloud_server/cloud_file_service.h>
-#include <cloud_server/user_auth_service.h>
 
 #include <QString>
 
 class QAction;
-class QMenu;
 class QEvent;
-class QUrl;
 class QWidget;
-class FileManagerView;
 
-QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
-class CloudFileService;
-class DesktopWebServer;
-class TitleBarUserChip;
-QJ_NAMESPACE_FIT_CLOUD_SERVER_END
+QJ_NAMESPACE_BEGIN1(cloudserver)
+class UserAuthService;
+QJ_NAMESPACE_END1
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
 class HomeWorkspace;
 class ToolLibDialog;
+class CloudController;
 
 class NMainWindow : public SARibbonMainWindow
 {
@@ -35,35 +29,19 @@ public:
 
     bool OpenFile(const QString& file_name, const QString& backup_file = "", bool silent = false);
     bool SaveFile(bool silent = false);
-    qianjizn::cloudserver::UserAuthService& UserAuth() { return _userAuth; }
-    const qianjizn::cloudserver::UserAuthService& UserAuth() const { return _userAuth; }
+    qianjizn::cloudserver::UserAuthService& UserAuth();
+    const qianjizn::cloudserver::UserAuthService& UserAuth() const;
 
 protected:
     bool event(QEvent* e) override;
 
-protected slots:
-    void RefreshUserChipFromSession();
-
 private:
     void InitializeMainWindowShell();
     void ApplyWindowPresentation();
-    bool EnsureDesktopWebServerReady(bool showWarning = true);
+    void InitCloudController();
     void InitRibbonBar();
-    void InitUserChip();
     void InitCentralWorkspace();
-    void HideFileManagerView();
-    void ShowFileManagerWorkspace(const QUrl& pageUrl);
-    void UpdateFileManagerOverlayGeometry();
-    void SyncUserChipIntoTitleBar();
-    void OnShowDocumentOverlay();
-    void OnShowAccountAuthDialog();
-    void OnShowAccountMenu();
-    void OnLogout();
-    void OnOpenPersonalProfile();
-    void OnOpenFileManager();
-    void OnOpenTeam();
     void OnShowToolLibDialog();
-    void SaveCloudFile();
     void OnOpen();
     void OnSave();
     void OnNewProject();
@@ -72,17 +50,9 @@ private:
     QAction* _actionNew { nullptr };
     QAction* _actionOpen { nullptr };
     QAction* _actionSave { nullptr };
-    qianjizn::cloudserver::UserAuthService _userAuth { qianjizn::cloudserver::CloudServerConfig {} };
-    qianjizn::cloudserver::CloudFileService* _cloudFileService { nullptr };
-    qianjizn::cloudserver::DesktopWebServer* _desktopWebServer { nullptr };
     HomeWorkspace* _homeWorkspace { nullptr };
-    FileManagerView* _fileManagerView { nullptr };
     ToolLibDialog* _toolLibDialog { nullptr };
-    qianjizn::cloudserver::TitleBarUserChip* _userChip { nullptr };
-    QMenu* _loginMenu { nullptr };
-    QAction* _personalCenterAction { nullptr };
-    QAction* _teamAction { nullptr };
-    QAction* _logoutAction { nullptr };
+    CloudController* _cloudController { nullptr };
 };
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END
