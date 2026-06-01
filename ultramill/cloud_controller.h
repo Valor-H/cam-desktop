@@ -44,6 +44,7 @@ public:
 signals:
     void OpenRequested();
     void NewProjectRequested();
+    void DocumentOverlayVisibleChanged(bool visible);
 
 private:
     bool EnsureDesktopWebServerReady(bool showWarning = true);

@@ -68,6 +68,7 @@ void CloudController::ToggleDocumentOverlay()
     }
 
     OpenFileManager();
+    emit DocumentOverlayVisibleChanged(_fileManagerView && _fileManagerView->isVisible());
 }
 
 void CloudController::PrepareForLocalOpen()
@@ -136,6 +137,8 @@ void CloudController::HideFileManagerView()
     if (_fileManagerView) {
         _fileManagerView->hide();
     }
+
+    emit DocumentOverlayVisibleChanged(false);
 }
 
 bool CloudController::EnsureDesktopWebServerReady(bool showWarning)
@@ -318,6 +321,7 @@ void CloudController::ShowFileManagerWorkspace(const QUrl& pageUrl)
     _fileManagerView->show();
     _fileManagerView->raise();
     _fileManagerView->SyncViewportGeometryNow();
+    emit DocumentOverlayVisibleChanged(true);
 }
 
 void CloudController::ShowAccountAuthDialog()

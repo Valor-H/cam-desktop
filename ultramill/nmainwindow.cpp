@@ -25,6 +25,7 @@ NMainWindow::NMainWindow(QWidget* parent)
     ApplyWindowPresentation();
 
     _actionDocument = new QAction(QStringLiteral("Document"), this);
+    _actionDocument->setCheckable(true);
     _actionNew = new QAction(QIcon(), tr("New"), this);
     _actionOpen = new QAction(QIcon(), tr("Open"), this);
     _actionSave = new QAction(QIcon(), tr("Save"), this);
@@ -64,6 +65,9 @@ void NMainWindow::InitCloudController()
 
     _cloudController = new CloudController(this);
     connect(_actionDocument, &QAction::triggered, _cloudController, &CloudController::ToggleDocumentOverlay);
+    connect(_cloudController, &CloudController::DocumentOverlayVisibleChanged, this, [this](bool visible) {
+        _actionDocument->setChecked(visible);
+    });
     connect(_cloudController, &CloudController::OpenRequested, this, &NMainWindow::OnOpen);
     connect(_cloudController, &CloudController::NewProjectRequested, this, &NMainWindow::OnNewProject);
 }
