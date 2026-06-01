@@ -23,7 +23,6 @@
 #include <QVariantList>
 #include <QVBoxLayout>
 #include <QWindow>
-#include <QtMath>
 
 #include <QtConcurrent/QtConcurrentRun>
 
@@ -34,7 +33,6 @@
 namespace
 {
 constexpr int kQjpFileType = 11;
-constexpr double kEmbeddedPageScale = 0.90;
 constexpr int kDesktopQueryErrorBusy = 409;
 constexpr int kDesktopQueryErrorBadRequest = 400;
 constexpr int kDesktopQueryErrorInternal = 500;
@@ -58,15 +56,6 @@ QString apiBaseStringForClient(const QUrl& url)
         baseUrl.chop(1);
     }
     return baseUrl;
-}
-
-double zoomFactorToLevel(double factor)
-{
-    if (factor <= 0.0 || qFuzzyCompare(factor, 1.0)) {
-        return 0.0;
-    }
-
-    return qLn(factor) / qLn(1.2);
 }
 }
 
@@ -236,15 +225,6 @@ void FileManagerView::ScheduleNativeBrowserWindowSync()
     });
 }
 
-void FileManagerView::ApplyEmbeddedScale()
-{
-    if (!m_view) {
-        return;
-    }
-
-    m_view->setZoomLevel(zoomFactorToLevel(kEmbeddedPageScale));
-}
-
 void FileManagerView::OnLoadStart()
 {
     InjectDesktopRuntime();
@@ -285,7 +265,6 @@ void FileManagerView::PushCurrentAuthStateToWeb()
 void FileManagerView::OnLoadEnd()
 {
     InjectDesktopRuntime();
-    ApplyEmbeddedScale();
     SyncAuthStateToWeb();
 }
 

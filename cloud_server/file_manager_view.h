@@ -67,8 +67,6 @@ signals:
     void ReturnToWorkspaceRequested();
 
 private:
-    /** 应用嵌入视图缩放参数。 */
-    void ApplyEmbeddedScale();
     /** 向网页注入桌面运行时对象。 */
     void InjectDesktopRuntime();
     /** 将认证状态同步到网页。 */
