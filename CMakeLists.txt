@@ -22,7 +22,7 @@ set(CMAKE_PREFIX_PATH "${QT_ROOT}")
 if(NOT EXISTS "${QT_WINDEPLOYQT_EXECUTABLE}")
     message(FATAL_ERROR "windeployqt.exe not found under ${QT_BIN_DIR}")
 endif()
-find_package(Qt5 COMPONENTS Core Gui Widgets Network Concurrent REQUIRED)
+find_package(Qt5 COMPONENTS Core Gui Widgets Network Concurrent LinguistTools REQUIRED)
 
 # 2. QCefView
 set(QCEF_ROOT "D:/Codes/3rdparty/QCefView")

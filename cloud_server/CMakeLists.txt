@@ -14,6 +14,17 @@ add_library(cloud_server SHARED
     ${CLOUD_SERVER_SOURCES}
 )
 
+set(CLOUD_SERVER_TS_FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/cloud_server_zh_CN.ts"
+)
+
+qt5_add_translation(CLOUD_SERVER_QM_FILES ${CLOUD_SERVER_TS_FILES})
+
+add_custom_target(cloud_server_translations DEPENDS ${CLOUD_SERVER_QM_FILES})
+add_dependencies(cloud_server cloud_server_translations)
+
+set(CLOUD_SERVER_QM_FILES ${CLOUD_SERVER_QM_FILES} PARENT_SCOPE)
+
 target_include_directories(cloud_server PUBLIC
     "${CMAKE_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}"
