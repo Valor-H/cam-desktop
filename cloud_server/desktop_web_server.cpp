@@ -4,6 +4,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -30,6 +31,16 @@ namespace
 		}
 
 		return -1;
+	}
+
+	int WriteStaticFileResponse(const QString& file_path, HttpResponse* resp)
+	{
+		if (!resp) {
+			return HTTP_STATUS_INTERNAL_SERVER_ERROR;
+		}
+
+		const QByteArray encoded_file_path = QFile::encodeName(file_path);
+		return resp->File(encoded_file_path.constData());
 	}
 }
 
@@ -123,11 +134,11 @@ void DesktopWebServer::ConfigureRoutes()
 
 		const QString file_path = ResolveStaticFilePath(path);
 		if (!file_path.isEmpty()) {
-			return resp->File(file_path.toStdString().c_str());
+			return WriteStaticFileResponse(file_path, resp);
 		}
 
 		const QString index_path = QDir(WebRootPath()).filePath(QStringLiteral("index.html"));
-		return resp->File(index_path.toStdString().c_str());
+		return WriteStaticFileResponse(index_path, resp);
 		});
 }
 
