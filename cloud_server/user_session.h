@@ -39,7 +39,7 @@ private:
 	void SetAuthenticatedState(bool on);
 
 	/** 标识当前是否已认证。 */
-	bool _authenticated{ false };
+	bool _authenticated;
 	/** 保存当前认证令牌。 */
 	QString _authToken;
 	/** 保存当前用户资料。 */

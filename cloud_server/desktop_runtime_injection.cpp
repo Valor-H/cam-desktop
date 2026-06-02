@@ -10,7 +10,7 @@
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 
-QJsonObject BuildDesktopRuntimePayload(const UserAuthService* authService)
+QJsonObject BuildDesktopRuntimePayload(const UserAuthService* auth_service)
 {
 	QJsonObject payload{
 		{ QStringLiteral("runtimeMode"), QStringLiteral("desktop") },
@@ -19,45 +19,45 @@ QJsonObject BuildDesktopRuntimePayload(const UserAuthService* authService)
 		{ QStringLiteral("user"), QJsonValue::Null },
 	};
 
-	if (!authService || !authService->Session()) {
+	if (!auth_service || !auth_service->Session()) {
 		return payload;
 	}
 
-	const QVariantMap currentUser = authService->Session()->CurrentUser();
-	const QString token = authService->Session()->AuthToken().trimmed();
-	const bool loggedIn = authService->Session()->IsAuthenticated() && !token.isEmpty() && !currentUser.isEmpty();
+	const QVariantMap current_user = auth_service->Session()->CurrentUser();
+	const QString token = auth_service->Session()->AuthToken().trimmed();
+	const bool logged_in = auth_service->Session()->IsAuthenticated() && !token.isEmpty() && !current_user.isEmpty();
 
-	payload.insert(QStringLiteral("loggedIn"), loggedIn);
-	payload.insert(QStringLiteral("token"), loggedIn ? token : QString());
-	if (loggedIn) {
-		payload.insert(QStringLiteral("user"), QJsonObject::fromVariantMap(currentUser));
+	payload.insert(QStringLiteral("loggedIn"), logged_in);
+	payload.insert(QStringLiteral("token"), logged_in ? token : QString());
+	if (logged_in) {
+		payload.insert(QStringLiteral("user"), QJsonObject::fromVariantMap(current_user));
 	}
 
 	return payload;
 }
 
-QString BuildDesktopRuntimeInjectionScript(const UserAuthService* authService)
+QString BuildDesktopRuntimeInjectionScript(const UserAuthService* auth_service)
 {
-	const QString payloadJson = QString::fromUtf8(
-		QJsonDocument(BuildDesktopRuntimePayload(authService)).toJson(QJsonDocument::Compact));
+	const QString payload_json = QString::fromUtf8(
+		QJsonDocument(BuildDesktopRuntimePayload(auth_service)).toJson(QJsonDocument::Compact));
 	return QStringLiteral(
 		"(function(){"
 		"window.__QJCAM_DESKTOP_RUNTIME__=Object.freeze(%1);"
 		"window.dispatchEvent(new CustomEvent('qjcam-desktop-runtime-ready'));"
 		"})();")
-		.arg(payloadJson);
+		.arg(payload_json);
 }
 
-bool InjectDesktopRuntimeIntoView(QCefView* view, const UserAuthService* authService, const QString& sourceUrl)
+bool InjectDesktopRuntimeIntoView(QCefView* view, const UserAuthService* auth_service, const QString& source_url)
 {
 	if (!view) {
 		return false;
 	}
 
-	const QString scriptUrl =
-		sourceUrl.trimmed().isEmpty() ? QStringLiteral("qjcam://desktop-runtime.js") : sourceUrl.trimmed();
+	const QString script_url =
+		source_url.trimmed().isEmpty() ? QStringLiteral("qjcam://desktop-runtime.js") : source_url.trimmed();
 	return view->executeJavascript(
-		QCefView::MainFrameID, BuildDesktopRuntimeInjectionScript(authService), scriptUrl);
+		QCefView::MainFrameID, BuildDesktopRuntimeInjectionScript(auth_service), script_url);
 }
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END

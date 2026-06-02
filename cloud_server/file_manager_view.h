@@ -27,7 +27,7 @@ namespace LocalFilesSnapshot
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 class UserAuthService;
-QJ_NAMESPACE_FIT_CLOUD_SERVER_END
+class CloudFileService;
 
 class CLOUD_SERVER_EXPORT FileManagerView : public QWidget
 {
@@ -36,9 +36,9 @@ class CLOUD_SERVER_EXPORT FileManagerView : public QWidget
 public:
 	/** 构造文件管理视图。 */
 	explicit FileManagerView(QWidget* parent,
-		qianjizn::cloudserver::UserAuthService* authService,
-		qianjizn::cloudserver::CloudFileService* cloudFileService,
-		const QUrl& pageUrl);
+		UserAuthService* auth_service,
+		CloudFileService* cloud_file_service,
+		const QUrl& page_url);
 	/** 析构文件管理视图。 */
 	~FileManagerView() override;
 	/** 刷新当前网页页面。 */
@@ -56,9 +56,9 @@ protected:
 
 signals:
 	/** 请求打开指定本地文件。 */
-	void OpenFileRequested(const QString& filePath);
+	void OpenFileRequested(const QString& file_path);
 	/** 请求打开已缓存到本地的云端文件。 */
-	void OpenCloudFileRequested(const QString& filePath, const QString& fileUuid);
+	void OpenCloudFileRequested(const QString& file_path, const QString& file_uuid);
 	/** 请求执行打开操作。 */
 	void OpenRequested();
 	/** 请求新建项目。 */
@@ -96,33 +96,35 @@ private:
 	/** 判断是否为桌面端最近文件请求。 */
 	bool IsDesktopRecentRequest(const QVariantMap& payload) const;
 	/** 回复打开最近文件失败信息。 */
-	void ReplyOpenRecentFileError(const QCefQuery& query, const QString& message, int errorCode = 500);
+	void ReplyOpenRecentFileError(const QCefQuery& query, const QString& message, int error_code = 500);
 	/** 回复打开最近文件成功信息。 */
-	void ReplyOpenRecentFileSuccess(const QCefQuery& query, const QString& openedPath);
+	void ReplyOpenRecentFileSuccess(const QCefQuery& query, const QString& opened_path);
 	/** 立即同步原生浏览器窗口。 */
 	void SyncNativeBrowserWindowNow();
 	/** 安排一次原生浏览器窗口同步。 */
 	void ScheduleNativeBrowserWindowSync();
 	/** 保存页面访问地址。 */
-	QUrl m_pageUrl;
+	QUrl _pageUrl;
 	/** 保存嵌入式浏览器视图。 */
-	QCefView* m_view{ nullptr };
+	QCefView* _view;
 	/** 保存原生浏览器窗口句柄。 */
-	QWindow* m_nativeBrowserWindow{ nullptr };
+	QWindow* _nativeBrowserWindow;
 	/** 监听本地文件快照异步结果。 */
-	QFutureWatcher<LocalFilesSnapshot::Result>* m_snapshotWatcher{ nullptr };
+	QFutureWatcher<LocalFilesSnapshot::Result>* _snapshotWatcher;
 	/** 保存认证服务实例。 */
-	qianjizn::cloudserver::UserAuthService* m_authService{ nullptr };
+	UserAuthService* _authService;
 	/** 保存云文件服务实例。 */
-	qianjizn::cloudserver::CloudFileService* m_cloudFileService{ nullptr };
+	CloudFileService* _cloudFileService;
 	/** 保存待处理的本地文件查询。 */
-	QCefQuery m_pendingLocalFilesQuery;
+	QCefQuery _pendingLocalFilesQuery;
 	/** 标识是否存在待处理的本地文件查询。 */
-	bool m_hasPendingLocalFilesQuery{ false };
+	bool _hasPendingLocalFilesQuery;
 	/** 保存待处理的最近文件打开查询。 */
-	QCefQuery m_pendingOpenRecentFileQuery;
+	QCefQuery _pendingOpenRecentFileQuery;
 	/** 标识是否存在待处理的最近文件打开查询。 */
-	bool m_hasPendingOpenRecentFileQuery{ false };
+	bool _hasPendingOpenRecentFileQuery;
 	/** 标识原生浏览器窗口同步是否待执行。 */
-	bool m_nativeBrowserSyncPending{ false };
+	bool _nativeBrowserSyncPending;
 };
+
+QJ_NAMESPACE_FIT_CLOUD_SERVER_END

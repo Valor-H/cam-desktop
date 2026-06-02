@@ -2,7 +2,7 @@
 #include <cloud_server/q_cef_runtime.h>
 
 // Q_INIT_RESOURCE cannot be called inside a namespace; use a file-scope helper.
-static void initUltramillResources()
+static void InitUltramillResources()
 {
 	Q_INIT_RESOURCE(ultramill);
 }
@@ -18,7 +18,7 @@ NApplication::~NApplication() = default;
 
 void NApplication::Initialize()
 {
-	initUltramillResources();
+	InitUltramillResources();
 	InitCefRuntime();
 }
 

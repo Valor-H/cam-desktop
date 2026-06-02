@@ -16,9 +16,9 @@
 
 #include <hv/requests.h>
 
-AuthHttpClient::AuthHttpClient(const QString& baseUrl, QObject* parent)
+AuthHttpClient::AuthHttpClient(const QString& base_url, QObject* parent)
 	: QObject(parent)
-	, _baseUrl(baseUrl)
+	, _baseUrl(base_url)
 	, _networkManager(new QNetworkAccessManager(this))
 	, _cancelEpoch(std::make_shared<std::atomic<quint64>>(0))
 {
@@ -31,28 +31,28 @@ AuthHttpClient::~AuthHttpClient()
 
 void AuthHttpClient::Post(
 	const QString& path,
-	const QString& bearerToken,
-	int            timeoutSec,
+	const QString& bearer_token,
+	int            timeout_sec,
 	Callback       callback)
 {
-	const quint64 myEpoch = _cancelEpoch->load(std::memory_order_relaxed);
-	auto          epochRef = _cancelEpoch;
+	const quint64 my_epoch = _cancelEpoch->load(std::memory_order_relaxed);
+	std::shared_ptr<std::atomic<quint64>> epoch_ref = _cancelEpoch;
 
-	auto req = std::make_shared<HttpRequest>();
+	std::shared_ptr<HttpRequest> req = std::make_shared<HttpRequest>();
 	req->method = HTTP_POST;
 	req->url = (_baseUrl + path).toStdString();
-	req->timeout = timeoutSec;
-	req->headers["Authorization"] = "Bearer " + bearerToken.toStdString();
+	req->timeout = timeout_sec;
+	req->headers["Authorization"] = "Bearer " + bearer_token.toStdString();
 	req->headers["Content-Type"] = "application/json";
 	req->headers["X-Client-Type"] = "desktop";
 	req->body = "{}";
 
 	requests::async(req,
-		[epochRef, myEpoch, cb = std::move(callback)](const HttpResponsePtr& resp) {
+		[epoch_ref, my_epoch, cb = std::move(callback)](const HttpResponsePtr& resp) {
 			QMetaObject::invokeMethod(
 				QCoreApplication::instance(),
-				[epochRef, myEpoch, resp, cb]() {
-					if (epochRef->load(std::memory_order_relaxed) != myEpoch) {
+				[epoch_ref, my_epoch, resp, cb]() {
+					if (epoch_ref->load(std::memory_order_relaxed) != my_epoch) {
 						return;
 					}
 
@@ -67,15 +67,15 @@ void AuthHttpClient::Post(
 					result.httpStatus = resp->status_code;
 
 					const QByteArray body = QByteArray::fromStdString(resp->body);
-					const QJsonDocument doc = QJsonDocument::fromJson(body);
-					if (doc.isObject()) {
-						const QJsonObject root = doc.object();
+					const QJsonDocument document = QJsonDocument::fromJson(body);
+					if (document.isObject()) {
+						const QJsonObject root = document.object();
 						result.bizCode = root.value(QStringLiteral("code")).toInt(-1);
 						result.bizMsg = root.value(QStringLiteral("msg")).toString();
-						const QJsonObject dataObj =
+						const QJsonObject data_obj =
 							root.value(QStringLiteral("data")).toObject();
-						if (!dataObj.isEmpty()) {
-							result.data = dataObj.toVariantMap();
+						if (!data_obj.isEmpty()) {
+							result.data = data_obj.toVariantMap();
 						}
 					}
 
@@ -87,35 +87,35 @@ void AuthHttpClient::Post(
 
 void AuthHttpClient::PostJsonToFile(
 	const QString& path,
-	const QString& bearerToken,
-	const QByteArray& jsonBody,
-	const QString& targetFilePath,
-	int timeoutSec,
+	const QString& bearer_token,
+	const QByteArray& json_body,
+	const QString& target_file_path,
+	int timeout_sec,
 	DownloadCallback callback)
 {
-	const quint64 myEpoch = _cancelEpoch->load(std::memory_order_relaxed);
-	auto epochRef = _cancelEpoch;
+	const quint64 my_epoch = _cancelEpoch->load(std::memory_order_relaxed);
+	std::shared_ptr<std::atomic<quint64>> epoch_ref = _cancelEpoch;
 
-	auto req = std::make_shared<HttpRequest>();
+	std::shared_ptr<HttpRequest> req = std::make_shared<HttpRequest>();
 	req->method = HTTP_POST;
 	req->url = (_baseUrl + path).toStdString();
-	req->timeout = timeoutSec;
-	req->headers["Authorization"] = "Bearer " + bearerToken.toStdString();
+	req->timeout = timeout_sec;
+	req->headers["Authorization"] = "Bearer " + bearer_token.toStdString();
 	req->headers["Content-Type"] = "application/json";
 	req->headers["X-Client-Type"] = "desktop";
-	req->body = jsonBody.toStdString();
+	req->body = json_body.toStdString();
 
 	requests::async(req,
-		[epochRef, myEpoch, cb = std::move(callback), targetFilePath](const HttpResponsePtr& resp) {
+		[epoch_ref, my_epoch, cb = std::move(callback), target_file_path](const HttpResponsePtr& resp) {
 			QMetaObject::invokeMethod(
 				QCoreApplication::instance(),
-				[epochRef, myEpoch, resp, cb, targetFilePath]() {
-					if (epochRef->load(std::memory_order_relaxed) != myEpoch) {
+				[epoch_ref, my_epoch, resp, cb, target_file_path]() {
+					if (epoch_ref->load(std::memory_order_relaxed) != my_epoch) {
 						return;
 					}
 
 					DownloadResponse result;
-					result.targetFilePath = targetFilePath;
+					result.targetFilePath = target_file_path;
 
 					if (!resp) {
 						result.errorMessage = QStringLiteral("network request failed");
@@ -132,7 +132,7 @@ void AuthHttpClient::PostJsonToFile(
 						return;
 					}
 
-					QFile target(targetFilePath);
+					QFile target(target_file_path);
 					if (!target.open(QIODevice::WriteOnly)) {
 						result.errorMessage = QStringLiteral("failed to open target file for writing");
 						cb(result);
@@ -159,18 +159,18 @@ void AuthHttpClient::PostJsonToFile(
 
 void AuthHttpClient::PostMultipartFile(
 	const QString& path,
-	const QString& bearerToken,
-	const QString& fileFieldName,
-	const QString& filePath,
-	const QVariantMap& formFields,
-	int timeoutSec,
+	const QString& bearer_token,
+	const QString& file_field_name,
+	const QString& file_path,
+	const QVariantMap& form_fields,
+	int timeout_sec,
 	Callback callback)
 {
-	const quint64 myEpoch = _cancelEpoch->load(std::memory_order_relaxed);
-	auto epochRef = _cancelEpoch;
+	const quint64 my_epoch = _cancelEpoch->load(std::memory_order_relaxed);
+	std::shared_ptr<std::atomic<quint64>> epoch_ref = _cancelEpoch;
 
-	QFileInfo fileInfo(filePath);
-	if (!fileInfo.exists() || !fileInfo.isFile()) {
+	QFileInfo file_info(file_path);
+	if (!file_info.exists() || !file_info.isFile()) {
 		QMetaObject::invokeMethod(
 			QCoreApplication::instance(),
 			[cb = std::move(callback)]() {
@@ -182,8 +182,8 @@ void AuthHttpClient::PostMultipartFile(
 		return;
 	}
 
-	auto* multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
-	for (auto it = formFields.constBegin(); it != formFields.constEnd(); ++it) {
+	QHttpMultiPart* multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+	for (auto it = form_fields.constBegin(); it != form_fields.constEnd(); ++it) {
 		QHttpPart textPart;
 		textPart.setHeader(
 			QNetworkRequest::ContentDispositionHeader,
@@ -192,7 +192,7 @@ void AuthHttpClient::PostMultipartFile(
 		multiPart->append(textPart);
 	}
 
-	auto* file = new QFile(filePath, multiPart);
+	QFile* file = new QFile(file_path, multiPart);
 	if (!file->open(QIODevice::ReadOnly)) {
 		multiPart->deleteLater();
 		QMetaObject::invokeMethod(
@@ -210,51 +210,51 @@ void AuthHttpClient::PostMultipartFile(
 	filePart.setHeader(
 		QNetworkRequest::ContentDispositionHeader,
 		QVariant(QStringLiteral("form-data; name=\"%1\"; filename=\"%2\"")
-			.arg(fileFieldName, fileInfo.fileName())));
+			.arg(file_field_name, file_info.fileName())));
 	filePart.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("application/octet-stream")));
 	filePart.setBodyDevice(file);
 	multiPart->append(filePart);
 
 	QNetworkRequest request(QUrl(_baseUrl + path));
-	request.setRawHeader("Authorization", QStringLiteral("Bearer %1").arg(bearerToken).toUtf8());
+	request.setRawHeader("Authorization", QStringLiteral("Bearer %1").arg(bearer_token).toUtf8());
 	request.setRawHeader("X-Client-Type", QByteArrayLiteral("desktop"));
 
 	QNetworkReply* reply = _networkManager->post(request, multiPart);
 	multiPart->setParent(reply);
 
-	auto* timeoutTimer = new QTimer(reply);
+	QTimer* timeoutTimer = new QTimer(reply);
 	timeoutTimer->setSingleShot(true);
 	connect(timeoutTimer, &QTimer::timeout, reply, [reply]() {
 		if (reply->isRunning()) {
 			reply->abort();
 		}
 		});
-	timeoutTimer->start(timeoutSec * 1000);
+	timeoutTimer->start(timeout_sec * 1000);
 
-	connect(reply, &QNetworkReply::finished, this, [epochRef, myEpoch, reply, cb = std::move(callback)]() mutable {
+	connect(reply, &QNetworkReply::finished, this, [epoch_ref, my_epoch, reply, cb = std::move(callback)]() mutable {
 		const QByteArray body = reply->readAll();
-		const QVariant statusVariant = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
+		const QVariant status_variant = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute);
 
 		Response result;
-		result.httpStatus = statusVariant.isValid() ? statusVariant.toInt() : 0;
+		result.httpStatus = status_variant.isValid() ? status_variant.toInt() : 0;
 		result.networkOk = reply->error() == QNetworkReply::NoError;
 		if (!result.networkOk) {
 			result.bizMsg = reply->errorString();
 		}
 
-		const QJsonDocument doc = QJsonDocument::fromJson(body);
-		if (doc.isObject()) {
-			const QJsonObject root = doc.object();
+		const QJsonDocument document = QJsonDocument::fromJson(body);
+		if (document.isObject()) {
+			const QJsonObject root = document.object();
 			result.bizCode = root.value(QStringLiteral("code")).toInt(-1);
 			result.bizMsg = root.value(QStringLiteral("msg")).toString(result.bizMsg);
-			const QJsonObject dataObj = root.value(QStringLiteral("data")).toObject();
-			if (!dataObj.isEmpty()) {
-				result.data = dataObj.toVariantMap();
+			const QJsonObject data_obj = root.value(QStringLiteral("data")).toObject();
+			if (!data_obj.isEmpty()) {
+				result.data = data_obj.toVariantMap();
 			}
 		}
 
 		reply->deleteLater();
-		if (epochRef->load(std::memory_order_relaxed) != myEpoch) {
+		if (epoch_ref->load(std::memory_order_relaxed) != my_epoch) {
 			return;
 		}
 

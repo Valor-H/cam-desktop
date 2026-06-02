@@ -17,32 +17,34 @@ class CLOUD_SERVER_EXPORT CloudFileService final : public QObject
 	Q_OBJECT
 
 public:
-	using OpenCallback = std::function<void(const QString& localFilePath, const QString& fileUuid, const QString& errorMessage)>;
+	using OpenCallback = std::function<void(const QString& local_file_path,
+		const QString& file_uuid,
+		const QString& error_message)>;
 	using SaveCallback = std::function<void(const AuthHttpClient::Response&)>;
 
-	explicit CloudFileService(UserAuthService* authService, QObject* parent = nullptr);
+	explicit CloudFileService(UserAuthService* auth_service, QObject* parent = nullptr);
 	~CloudFileService() override;
 
 	void ClearCurrentFile();
-	void TrackOpenedLocalFile(const QString& filePath);
-	void TrackOpenedCloudFile(const QString& filePath, const QString& fileUuid);
+	void TrackOpenedLocalFile(const QString& file_path);
+	void TrackOpenedCloudFile(const QString& file_path, const QString& file_uuid);
 	bool IsCurrentFileCloud() const;
 	bool SaveInFlight() const;
-	bool OpenCloudFile(const QString& fileUuid,
-		const QString& suggestedFileName,
+	bool OpenCloudFile(const QString& file_uuid,
+		const QString& suggested_file_name,
 		OpenCallback callback,
-		QString* errorMessage = nullptr);
-	bool SaveCurrentCloudFile(SaveCallback callback, QString* errorMessage = nullptr);
+		QString* error_message = nullptr);
+	bool SaveCurrentCloudFile(SaveCallback callback, QString* error_message = nullptr);
 
 private:
 	AuthHttpClient* EnsureHttpClient();
-	QString BuildCacheFilePath(const QString& fileUuid, const QString& suggestedFileName) const;
+	QString BuildCacheFilePath(const QString& file_uuid, const QString& suggested_file_name) const;
 
-	UserAuthService* _authService{ nullptr };
-	AuthHttpClient* _httpClient{ nullptr };
+	UserAuthService* _authService;
+	AuthHttpClient* _httpClient;
 	QString _currentOpenedFilePath;
 	QString _currentOpenedCloudFileUuid;
-	bool _saveInFlight{ false };
+	bool _saveInFlight;
 };
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END

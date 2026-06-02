@@ -14,18 +14,18 @@ QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 
 namespace
 {
-	constexpr int kDesktopWebServerBasePort = 31870;
-	constexpr int kDesktopWebServerMaxPortScan = 200;
+	constexpr int s_desktopWebServerBasePort = 31870;
+	constexpr int s_desktopWebServerMaxPortScan = 200;
 
-	int startDesktopWebServer(hv::HttpServer& server, int preferredPort)
+	int StartDesktopWebServer(hv::HttpServer& server, int preferred_port)
 	{
-		const int startPort = preferredPort > 0 ? preferredPort : kDesktopWebServerBasePort;
+		const int start_port = preferred_port > 0 ? preferred_port : s_desktopWebServerBasePort;
 
-		for (int offset = 0; offset < kDesktopWebServerMaxPortScan; ++offset) {
-			const int candidatePort = startPort + offset;
-			server.setPort(candidatePort);
+		for (int offset = 0; offset < s_desktopWebServerMaxPortScan; ++offset) {
+			const int candidate_port = start_port + offset;
+			server.setPort(candidate_port);
 			if (server.start() == 0) {
-				return candidatePort;
+				return candidate_port;
 			}
 		}
 
@@ -39,10 +39,13 @@ struct DesktopWebServer::Private
 	hv::HttpServer server;
 };
 
-DesktopWebServer::DesktopWebServer(UserAuthService* authService, QObject* parent)
+DesktopWebServer::DesktopWebServer(UserAuthService* auth_service, QObject* parent)
 	: QObject(parent)
-	, m_authService(authService)
 	, d(new Private)
+	, _authService(auth_service)
+	, _serviceRegistered(false)
+	, _started(false)
+	, _port(31870)
 {
 	ConfigureRoutes();
 }
@@ -54,46 +57,46 @@ DesktopWebServer::~DesktopWebServer()
 
 bool DesktopWebServer::Start()
 {
-	if (m_started) {
+	if (_started) {
 		return true;
 	}
 
-	const QString indexPath = QDir(WebRootPath()).filePath(QStringLiteral("index.html"));
-	if (!QFileInfo::exists(indexPath)) {
+	const QString index_path = QDir(WebRootPath()).filePath(QStringLiteral("index.html"));
+	if (!QFileInfo::exists(index_path)) {
 		return false;
 	}
 
-	if (!m_serviceRegistered) {
+	if (!_serviceRegistered) {
 		d->server.registerHttpService(&d->service);
-		m_serviceRegistered = true;
+		_serviceRegistered = true;
 	}
 
 	d->server.setHost("127.0.0.1");
 	d->server.setThreadNum(1);
 
-	const int port = startDesktopWebServer(d->server, m_port);
+	const int port = StartDesktopWebServer(d->server, _port);
 	if (port <= 0) {
 		return false;
 	}
 
-	m_port = port;
-	m_started = true;
+	_port = port;
+	_started = true;
 	return true;
 }
 
 void DesktopWebServer::Stop()
 {
-	if (!m_started) {
+	if (!_started) {
 		return;
 	}
 
 	d->server.stop();
-	m_started = false;
+	_started = false;
 }
 
 QUrl DesktopWebServer::BaseUrl() const
 {
-	return QUrl(QStringLiteral("http://127.0.0.1:%1/").arg(m_port));
+	return QUrl(QStringLiteral("http://127.0.0.1:%1/").arg(_port));
 }
 
 void DesktopWebServer::ConfigureRoutes()
@@ -118,13 +121,13 @@ void DesktopWebServer::ConfigureRoutes()
 			return HTTP_STATUS_OK;
 		}
 
-		const QString filePath = ResolveStaticFilePath(path);
-		if (!filePath.isEmpty()) {
-			return resp->File(filePath.toStdString().c_str());
+		const QString file_path = ResolveStaticFilePath(path);
+		if (!file_path.isEmpty()) {
+			return resp->File(file_path.toStdString().c_str());
 		}
 
-		const QString indexPath = QDir(WebRootPath()).filePath(QStringLiteral("index.html"));
-		return resp->File(indexPath.toStdString().c_str());
+		const QString index_path = QDir(WebRootPath()).filePath(QStringLiteral("index.html"));
+		return resp->File(index_path.toStdString().c_str());
 		});
 }
 
@@ -132,58 +135,60 @@ QString DesktopWebServer::BuildRuntimeConfigJson() const
 {
 	QJsonObject payload{
 		{ QStringLiteral("runtimeMode"), QStringLiteral("desktop") },
-		{ QStringLiteral("backendUrl"), m_authService ? m_authService->ApiBaseUrl().toString().trimmed() : QString() },
-		{ QStringLiteral("websocketUrl"), m_authService ? m_authService->Config().websocketUrl.toString().trimmed() : QString() },
-		{ QStringLiteral("helpDocUrl"), m_authService ? m_authService->Config().helpDocUrl.toString().trimmed() : QString() },
-		{ QStringLiteral("mockServiceUrl"), m_authService ? m_authService->Config().mockServiceUrl.toString().trimmed() : QString() },
+		{ QStringLiteral("backendUrl"), _authService ? _authService->ApiBaseUrl().toString().trimmed() : QString() },
+		{ QStringLiteral("websocketUrl"),
+			_authService ? _authService->Config().websocketUrl.toString().trimmed() : QString() },
+		{ QStringLiteral("helpDocUrl"), _authService ? _authService->Config().helpDocUrl.toString().trimmed() : QString() },
+		{ QStringLiteral("mockServiceUrl"),
+			_authService ? _authService->Config().mockServiceUrl.toString().trimmed() : QString() },
 	};
 
 	return QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
 }
 
-QString DesktopWebServer::ResolveStaticFilePath(const QString& requestPath) const
+QString DesktopWebServer::ResolveStaticFilePath(const QString& request_path) const
 {
-	const QString rootPath = WebRootPath();
-	const QString relative = requestPath == QStringLiteral("/") ? QStringLiteral("index.html") : requestPath.mid(1);
-	const QString decoded = QUrl::fromPercentEncoding(relative.toUtf8());
-	const QString cleanPath = QDir::cleanPath(decoded);
-	if (cleanPath.isEmpty() || cleanPath.startsWith(QStringLiteral(".."))) {
+	const QString root_path = WebRootPath();
+	const QString relative_path = request_path == QStringLiteral("/") ? QStringLiteral("index.html") : request_path.mid(1);
+	const QString decoded_path = QUrl::fromPercentEncoding(relative_path.toUtf8());
+	const QString clean_path = QDir::cleanPath(decoded_path);
+	if (clean_path.isEmpty() || clean_path.startsWith(QStringLiteral(".."))) {
 		return QString();
 	}
 
-	const QString absolutePath = QDir(rootPath).absoluteFilePath(cleanPath);
-	const QFileInfo info(absolutePath);
+	const QString absolute_path = QDir(root_path).absoluteFilePath(clean_path);
+	const QFileInfo info(absolute_path);
 	if (!info.exists() || !info.isFile()) {
 		return QString();
 	}
 
-	const QString canonicalRoot = QFileInfo(rootPath).canonicalFilePath();
-	const QString canonicalFile = info.canonicalFilePath();
-	if (!canonicalRoot.isEmpty() && !canonicalFile.startsWith(canonicalRoot, Qt::CaseInsensitive)) {
+	const QString canonical_root = QFileInfo(root_path).canonicalFilePath();
+	const QString canonical_file = info.canonicalFilePath();
+	if (!canonical_root.isEmpty() && !canonical_file.startsWith(canonical_root, Qt::CaseInsensitive)) {
 		return QString();
 	}
 
-	return absolutePath;
+	return absolute_path;
 }
 
 QString DesktopWebServer::WebRootPath() const
 {
-	const QDir appDir(QCoreApplication::applicationDirPath());
+	const QDir app_dir(QCoreApplication::applicationDirPath());
 
-	const QString localWebRoot = appDir.absoluteFilePath(QStringLiteral("web"));
-	if (QFileInfo::exists(QDir(localWebRoot).filePath(QStringLiteral("index.html")))) {
-		return localWebRoot;
+	const QString local_web_root = app_dir.absoluteFilePath(QStringLiteral("web"));
+	if (QFileInfo::exists(QDir(local_web_root).filePath(QStringLiteral("index.html")))) {
+		return local_web_root;
 	}
 
-	QDir runtimeRoot(appDir);
-	if (runtimeRoot.cdUp()) {
-		const QString siblingWebRoot = runtimeRoot.absoluteFilePath(QStringLiteral("web"));
-		if (QFileInfo::exists(QDir(siblingWebRoot).filePath(QStringLiteral("index.html")))) {
-			return siblingWebRoot;
+	QDir runtime_root(app_dir);
+	if (runtime_root.cdUp()) {
+		const QString sibling_web_root = runtime_root.absoluteFilePath(QStringLiteral("web"));
+		if (QFileInfo::exists(QDir(sibling_web_root).filePath(QStringLiteral("index.html")))) {
+			return sibling_web_root;
 		}
 	}
 
-	return localWebRoot;
+	return local_web_root;
 }
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END

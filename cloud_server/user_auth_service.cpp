@@ -8,14 +8,12 @@
 #include <QSettings>
 #include <QWidget>
 
-QJ_USING_NAMESPACE_FIT_CLOUD_SERVER
-
 namespace
 {
-	constexpr int kWindowActivateRefreshDebounceMs = 800;
-	constexpr int kWindowActivateRefreshThrottleMs = 12000;
+	constexpr int s_windowActivateRefreshDebounceMs = 800;
+	constexpr int s_windowActivateRefreshThrottleMs = 12000;
 
-	QString apiBaseStringForClient(const QUrl& u)
+	QString ApiBaseStringForClient(const QUrl& u)
 	{
 		QString s = u.toString(QUrl::RemoveQuery | QUrl::RemoveFragment);
 		while (s.endsWith(QLatin1Char('/'))) {
@@ -31,11 +29,14 @@ UserAuthService::UserAuthService(const CloudServerConfig& cfg, QObject* parent)
 	: QObject(parent)
 	, _cfg(cfg)
 	, _userSession(this)
-	, _authClient(new AuthHttpClient(apiBaseStringForClient(_cfg.apiBaseUrl), this))
+	, _authClient(new AuthHttpClient(ApiBaseStringForClient(_cfg.apiBaseUrl), this))
 	, _authSyncChannel(new LocalAuthSyncChannel(
 		_cfg,
 		[this](bool authenticated) { ApplyAuthStateChangedFromPeer(authenticated); },
 		this))
+	, _windowActivateRefreshDebounceTimer(nullptr)
+	, _lastWindowActivateRefreshAt()
+	, _userHydrationInFlight(false)
 {
 	_windowActivateRefreshDebounceTimer = new QTimer(this);
 	_windowActivateRefreshDebounceTimer->setSingleShot(true);
@@ -97,8 +98,8 @@ void UserAuthService::SyncSessionFromSharedSettings()
 
 void UserAuthService::ShowAccountAuthDialog(QWidget* parent)
 {
-	const QUrl loginUrl = buildDesktopLoginUrl(_cfg.frontendBaseUrl);
-	AccountAuthDialog dlg(parent, loginUrl, this);
+	const QUrl login_url = BuildDesktopLoginUrl(_cfg.frontendBaseUrl);
+	AccountAuthDialog dlg(parent, login_url, this);
 	connect(&dlg, &AccountAuthDialog::AuthSucceeded, this, &UserAuthService::OnLoginSucceeded);
 	dlg.exec();
 }
@@ -125,7 +126,7 @@ void UserAuthService::InitFromStoredToken()
 	SyncSessionFromSharedSettings();
 }
 
-void UserAuthService::BuildExternalWebSsoUrl(const QString& redirectPath, WebSsoUrlCallback callback)
+void UserAuthService::BuildExternalWebSsoUrl(const QString& redirect_path, WebSsoUrlCallback callback)
 {
 	if (!callback) {
 		return;
@@ -142,7 +143,7 @@ void UserAuthService::BuildExternalWebSsoUrl(const QString& redirectPath, WebSso
 	}
 
 	_authClient->Post(QStringLiteral("/api/auth/ticket/exchange"), token, 10,
-		[this, redirectPath, cb = std::move(callback)](const AuthHttpClient::Response& resp) mutable {
+		[this, redirect_path, cb = std::move(callback)](const AuthHttpClient::Response& resp) mutable {
 			if (!resp.networkOk) {
 				cb(QUrl(), QStringLiteral("Network error"));
 				return;
@@ -161,11 +162,11 @@ void UserAuthService::BuildExternalWebSsoUrl(const QString& redirectPath, WebSso
 				return;
 			}
 
-			cb(buildExternalSsoLoginUrl(_cfg.externalFrontendBaseUrl, ticket, redirectPath), QString());
+			cb(BuildExternalSsoLoginUrl(_cfg.externalFrontendBaseUrl, ticket, redirect_path), QString());
 		});
 }
 
-void UserAuthService::StartDirectUserHydration(const QString& token, bool allowRefresh)
+void UserAuthService::StartDirectUserHydration(const QString& token, bool allow_refresh)
 {
 	const QString trimmed = token.trimmed();
 	if (trimmed.isEmpty()) {
@@ -175,34 +176,34 @@ void UserAuthService::StartDirectUserHydration(const QString& token, bool allowR
 
 	CancelAllPendingRequests();
 	_userHydrationInFlight = true;
-	FetchCurrentUserDirect(trimmed, allowRefresh);
+	FetchCurrentUserDirect(trimmed, allow_refresh);
 }
 
-void UserAuthService::FetchCurrentUserDirect(const QString& token, bool allowRefresh)
+void UserAuthService::FetchCurrentUserDirect(const QString& token, bool allow_refresh)
 {
 	_authClient->Post(QStringLiteral("/api/user/current"), token, 10,
-		[this, token, allowRefresh](const AuthHttpClient::Response& resp) {
+		[this, token, allow_refresh](const AuthHttpClient::Response& resp) {
 			if (!resp.networkOk) {
 				_userHydrationInFlight = false;
 				return;
 			}
 
 			if (resp.bizCode == 200) {
-				const QVariantMap userMap = resp.data;
-				if (userMap.isEmpty()) {
+				const QVariantMap user_map = resp.data;
+				if (user_map.isEmpty()) {
 					_userHydrationInFlight = false;
 					return;
 				}
 
 				QVariantMap payload;
 				payload.insert(QStringLiteral("token"), token);
-				payload.insert(QStringLiteral("user"), userMap);
+				payload.insert(QStringLiteral("user"), user_map);
 				_userSession.ApplyFromLoginPayload(payload);
 				_userHydrationInFlight = false;
 				return;
 			}
 
-			if (resp.bizCode == 401 && allowRefresh) {
+			if (resp.bizCode == 401 && allow_refresh) {
 				RefreshTokenDirectAndRetry(token);
 				return;
 			}
@@ -284,7 +285,7 @@ void UserAuthService::ScheduleWindowActivateRefresh()
 	if (!_windowActivateRefreshDebounceTimer) {
 		return;
 	}
-	_windowActivateRefreshDebounceTimer->start(kWindowActivateRefreshDebounceMs);
+	_windowActivateRefreshDebounceTimer->start(s_windowActivateRefreshDebounceMs);
 }
 
 void UserAuthService::TryRefreshUserProfileOnWindowActivate()
@@ -297,7 +298,7 @@ void UserAuthService::TryRefreshUserProfileOnWindowActivate()
 		return;
 	}
 	if (_lastWindowActivateRefreshAt.isValid()
-		&& _lastWindowActivateRefreshAt.elapsed() < kWindowActivateRefreshThrottleMs) {
+		&& _lastWindowActivateRefreshAt.elapsed() < s_windowActivateRefreshThrottleMs) {
 		return;
 	}
 

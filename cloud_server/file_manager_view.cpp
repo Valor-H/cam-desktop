@@ -32,41 +32,47 @@
 
 namespace
 {
-	constexpr int kQjpFileType = 11;
-	constexpr int kDesktopQueryErrorBusy = 409;
-	constexpr int kDesktopQueryErrorBadRequest = 400;
-	constexpr int kDesktopQueryErrorInternal = 500;
-	const QString kMethodRequestLocalFiles = QStringLiteral("Desktop.RequestLocalFiles");
-	const QString kMethodRequestLogin = QStringLiteral("Desktop.RequestLogin");
-	const QString kMethodRequestOpenRecentFile = QStringLiteral("Desktop.RequestOpenRecentFile");
-	const QString kMethodRequestOpenFile = QStringLiteral("Desktop.RequestOpenFile");
-	const QString kMethodRequestOpen = QStringLiteral("Desktop.RequestOpen");
-	const QString kMethodRequestNewProject = QStringLiteral("Desktop.RequestNewProject");
-	const QString kMethodRequestReturnToWorkspace = QStringLiteral("Desktop.RequestReturnToWorkspace");
-	const QString kEventDesktopOnResume = QStringLiteral("Desktop.OnResume");
+	constexpr int s_qjpFileType = 11;
+	constexpr int s_desktopQueryErrorBusy = 409;
+	constexpr int s_desktopQueryErrorBadRequest = 400;
+	constexpr int s_desktopQueryErrorInternal = 500;
+	const QString s_methodRequestLocalFiles = QStringLiteral("Desktop.RequestLocalFiles");
+	const QString s_methodRequestLogin = QStringLiteral("Desktop.RequestLogin");
+	const QString s_methodRequestOpenRecentFile = QStringLiteral("Desktop.RequestOpenRecentFile");
+	const QString s_methodRequestOpenFile = QStringLiteral("Desktop.RequestOpenFile");
+	const QString s_methodRequestOpen = QStringLiteral("Desktop.RequestOpen");
+	const QString s_methodRequestNewProject = QStringLiteral("Desktop.RequestNewProject");
+	const QString s_methodRequestReturnToWorkspace = QStringLiteral("Desktop.RequestReturnToWorkspace");
+	const QString s_eventDesktopOnResume = QStringLiteral("Desktop.OnResume");
 
-#ifndef CAMDEMO_RECENT_FILE_CACHE_DIR
-#define CAMDEMO_RECENT_FILE_CACHE_DIR "D:/cachePath/"
-#endif
-
-	QString apiBaseStringForClient(const QUrl& url)
+	QString ApiBaseStringForClient(const QUrl& url)
 	{
-		QString baseUrl = url.toString(QUrl::RemoveQuery | QUrl::RemoveFragment);
-		while (baseUrl.endsWith(QLatin1Char('/'))) {
-			baseUrl.chop(1);
+		QString base_url = url.toString(QUrl::RemoveQuery | QUrl::RemoveFragment);
+		while (base_url.endsWith(QLatin1Char('/'))) {
+			base_url.chop(1);
 		}
-		return baseUrl;
+		return base_url;
 	}
 }
 
+QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
+
 FileManagerView::FileManagerView(QWidget* parent,
-	qianjizn::cloudserver::UserAuthService* authService,
-	qianjizn::cloudserver::CloudFileService* cloudFileService,
-	const QUrl& pageUrl)
+	UserAuthService* auth_service,
+	CloudFileService* cloud_file_service,
+	const QUrl& page_url)
 	: QWidget(parent)
-	, m_pageUrl(pageUrl)
-	, m_authService(authService)
-	, m_cloudFileService(cloudFileService)
+	, _pageUrl(page_url)
+	, _view(nullptr)
+	, _nativeBrowserWindow(nullptr)
+	, _snapshotWatcher(nullptr)
+	, _authService(auth_service)
+	, _cloudFileService(cloud_file_service)
+	, _pendingLocalFilesQuery()
+	, _hasPendingLocalFilesQuery(false)
+	, _pendingOpenRecentFileQuery()
+	, _hasPendingOpenRecentFileQuery(false)
+	, _nativeBrowserSyncPending(false)
 {
 	setWindowFlags(Qt::Tool | Qt::FramelessWindowHint);
 	setObjectName(QStringLiteral("embeddedFileManagerOverlay"));
@@ -78,59 +84,59 @@ FileManagerView::FileManagerView(QWidget* parent,
 	pal.setColor(QPalette::Window, Qt::white);
 	setPalette(pal);
 
-	auto* layout = new QVBoxLayout(this);
+	QVBoxLayout* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
 
 	QCefSetting setting;
 	setting.setBackgroundColor(QColor(Qt::white));
 
-	m_view = new QCefView(m_pageUrl.toString(), &setting, this);
-	m_view->setAutoFillBackground(true);
-	m_view->setPalette(palette());
-	layout->addWidget(m_view);
+	_view = new QCefView(_pageUrl.toString(), &setting, this);
+	_view->setAutoFillBackground(true);
+	_view->setPalette(palette());
+	layout->addWidget(_view);
 
-	connect(m_view, &QCefView::nativeBrowserCreated, this, [this](QWindow* window) {
-		m_nativeBrowserWindow = window;
+	connect(_view, &QCefView::nativeBrowserCreated, this, [this](QWindow* window) {
+		_nativeBrowserWindow = window;
 		ScheduleNativeBrowserWindowSync();
 		});
 
-	m_snapshotWatcher = new QFutureWatcher<LocalFilesSnapshot::Result>(this);
+	_snapshotWatcher = new QFutureWatcher<LocalFilesSnapshot::Result>(this);
 
-	connect(m_view,
+	connect(_view,
 		&QCefView::loadStart,
 		this,
-		[this](const QCefBrowserId&, const QCefFrameId&, bool isMainFrame, int) {
-			if (isMainFrame) {
+		[this](const QCefBrowserId&, const QCefFrameId&, bool is_main_frame, int) {
+			if (is_main_frame) {
 				OnLoadStart();
 			}
 		});
-	connect(m_view,
+	connect(_view,
 		&QCefView::loadEnd,
 		this,
-		[this](const QCefBrowserId&, const QCefFrameId&, bool isMainFrame, int) {
-			if (isMainFrame) {
+		[this](const QCefBrowserId&, const QCefFrameId&, bool is_main_frame, int) {
+			if (is_main_frame) {
 				OnLoadEnd();
 			}
 		});
-	connect(m_view,
+	connect(_view,
 		&QCefView::addressChanged,
 		this,
-		[this](const QCefFrameId&, const QString& url) { m_pageUrl = QUrl(url); });
-	connect(m_view,
+		[this](const QCefFrameId&, const QString& url) { _pageUrl = QUrl(url); });
+	connect(_view,
 		&QCefView::cefQueryRequest,
 		this,
 		[this](const QCefBrowserId&, const QCefFrameId&, const QCefQuery& query) { OnCefQueryRequest(query); });
-	connect(m_snapshotWatcher, &QFutureWatcher<LocalFilesSnapshot::Result>::finished, this, [this]() {
-		PushLocalFilesSnapshot(m_snapshotWatcher->result());
+	connect(_snapshotWatcher, &QFutureWatcher<LocalFilesSnapshot::Result>::finished, this, [this]() {
+		PushLocalFilesSnapshot(_snapshotWatcher->result());
 		});
-	if (m_authService && m_authService->Session()) {
-		connect(m_authService->Session(), &qianjizn::cloudserver::UserSession::AuthStateChanged, this, [this](bool) {
+	if (_authService && _authService->Session()) {
+		connect(_authService->Session(), &qianjizn::cloudserver::UserSession::AuthStateChanged, this, [this](bool) {
 			SyncAuthStateToWeb();
 			if (isVisible()) {
 				RefreshCurrentPage();
 			}
 			});
-		connect(m_authService->Session(), &qianjizn::cloudserver::UserSession::UserProfileChanged, this, [this]() {
+		connect(_authService->Session(), &qianjizn::cloudserver::UserSession::UserProfileChanged, this, [this]() {
 			SyncAuthStateToWeb();
 			if (isVisible()) {
 				RefreshCurrentPage();
@@ -143,7 +149,7 @@ FileManagerView::~FileManagerView() = default;
 
 void FileManagerView::RefreshCurrentPage()
 {
-	if (!m_view) {
+	if (!_view) {
 		return;
 	}
 
@@ -152,19 +158,19 @@ void FileManagerView::RefreshCurrentPage()
 		{ QStringLiteral("ts"), QString::number(QDateTime::currentMSecsSinceEpoch()) },
 	};
 	const QString json = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
-	QCefEvent event(kEventDesktopOnResume);
+	QCefEvent event(s_eventDesktopOnResume);
 	event.setArguments(QVariantList{ json });
-	m_view->triggerEvent(event, QCefView::MainFrameID);
+	_view->triggerEvent(event, QCefView::MainFrameID);
 }
 
 void FileManagerView::InjectDesktopRuntime()
 {
-	qianjizn::cloudserver::InjectDesktopRuntimeIntoView(m_view, m_authService, m_pageUrl.toString());
+	InjectDesktopRuntimeIntoView(_view, _authService, _pageUrl.toString());
 }
 
 void FileManagerView::SyncViewportGeometryNow()
 {
-	if (!m_view) {
+	if (!_view) {
 		return;
 	}
 
@@ -173,9 +179,9 @@ void FileManagerView::SyncViewportGeometryNow()
 		rootLayout->activate();
 	}
 
-	m_view->setGeometry(rect());
-	m_view->resize(size());
-	m_view->updateGeometry();
+	_view->setGeometry(rect());
+	_view->resize(size());
+	_view->updateGeometry();
 	SyncNativeBrowserWindowNow();
 }
 
@@ -203,24 +209,24 @@ void FileManagerView::resizeEvent(QResizeEvent* event)
 
 void FileManagerView::SyncNativeBrowserWindowNow()
 {
-	if (!m_view || !m_nativeBrowserWindow) {
+	if (!_view || !_nativeBrowserWindow) {
 		return;
 	}
 
-	m_nativeBrowserWindow->setVisible(isVisible() && m_view->isVisible());
-	m_nativeBrowserWindow->setPosition(0, 0);
-	m_nativeBrowserWindow->resize(m_view->size());
+	_nativeBrowserWindow->setVisible(isVisible() && _view->isVisible());
+	_nativeBrowserWindow->setPosition(0, 0);
+	_nativeBrowserWindow->resize(_view->size());
 }
 
 void FileManagerView::ScheduleNativeBrowserWindowSync()
 {
-	if (m_nativeBrowserSyncPending) {
+	if (_nativeBrowserSyncPending) {
 		return;
 	}
 
-	m_nativeBrowserSyncPending = true;
+	_nativeBrowserSyncPending = true;
 	QTimer::singleShot(0, this, [this]() {
-		m_nativeBrowserSyncPending = false;
+		_nativeBrowserSyncPending = false;
 		SyncViewportGeometryNow();
 		});
 }
@@ -232,7 +238,7 @@ void FileManagerView::OnLoadStart()
 
 void FileManagerView::SyncAuthStateToWeb()
 {
-	if (!m_authService || !m_authService->Session()) {
+	if (!_authService || !_authService->Session()) {
 		return;
 	}
 	PushCurrentAuthStateToWeb();
@@ -240,26 +246,26 @@ void FileManagerView::SyncAuthStateToWeb()
 
 void FileManagerView::PushCurrentAuthStateToWeb()
 {
-	if (!m_view || !m_authService || !m_authService->Session()) {
+	if (!_view || !_authService || !_authService->Session()) {
 		return;
 	}
 
 	InjectDesktopRuntime();
 
-	const QString token = m_authService->Session()->AuthToken().trimmed();
-	const QVariantMap currentUser = m_authService->Session()->CurrentUser();
-	const bool loggedIn = m_authService->Session()->IsAuthenticated() && !token.isEmpty() && !currentUser.isEmpty();
+	const QString token = _authService->Session()->AuthToken().trimmed();
+	const QVariantMap current_user = _authService->Session()->CurrentUser();
+	const bool logged_in = _authService->Session()->IsAuthenticated() && !token.isEmpty() && !current_user.isEmpty();
 
 	const QJsonObject payload{
-		{ QStringLiteral("loggedIn"), loggedIn },
-		{ QStringLiteral("token"), loggedIn ? token : QString() },
-		{ QStringLiteral("user"), loggedIn ? QJsonObject::fromVariantMap(currentUser) : QJsonObject {} },
+		{ QStringLiteral("loggedIn"), logged_in },
+		{ QStringLiteral("token"), logged_in ? token : QString() },
+		{ QStringLiteral("user"), logged_in ? QJsonObject::fromVariantMap(current_user) : QJsonObject {} },
 	};
 	const QString json = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
 
 	QCefEvent event(QStringLiteral("Desktop.AuthSync"));
 	event.setArguments(QVariantList{ json });
-	m_view->triggerEvent(event, QCefView::MainFrameID);
+	_view->triggerEvent(event, QCefView::MainFrameID);
 }
 
 void FileManagerView::OnLoadEnd()
@@ -270,46 +276,46 @@ void FileManagerView::OnLoadEnd()
 
 void FileManagerView::OnCefQueryRequest(const QCefQuery& query)
 {
-	if (!m_view) {
+	if (!_view) {
 		return;
 	}
 
 	QString method;
 	QVariantMap payload;
-	const QByteArray rawRequest = query.request().toUtf8();
-	QJsonParseError parseError{};
-	const QJsonDocument document = QJsonDocument::fromJson(rawRequest, &parseError);
-	if (parseError.error == QJsonParseError::NoError && document.isObject()) {
-		const QJsonObject requestObject = document.object();
-		method = requestObject.value(QStringLiteral("method")).toString().trimmed();
-		payload = requestObject.value(QStringLiteral("payload")).toObject().toVariantMap();
+	const QByteArray raw_request = query.request().toUtf8();
+	QJsonParseError parse_error{};
+	const QJsonDocument document = QJsonDocument::fromJson(raw_request, &parse_error);
+	if (parse_error.error == QJsonParseError::NoError && document.isObject()) {
+		const QJsonObject request_object = document.object();
+		method = request_object.value(QStringLiteral("method")).toString().trimmed();
+		payload = request_object.value(QStringLiteral("payload")).toObject().toVariantMap();
 	}
 	else {
-		method = QString::fromUtf8(rawRequest).trimmed();
+		method = QString::fromUtf8(raw_request).trimmed();
 	}
 
-	if (method == kMethodRequestLocalFiles) {
+	if (method == s_methodRequestLocalFiles) {
 		RequestLocalFilesSnapshot(&query);
 		return;
 	}
 
-	if (method == kMethodRequestLogin) {
+	if (method == s_methodRequestLogin) {
 		HandleDesktopLoginRequest(&query);
 		return;
 	}
 
-	if (method == kMethodRequestOpenRecentFile) {
+	if (method == s_methodRequestOpenRecentFile) {
 		HandleOpenRecentFileRequest(payload, &query);
 		return;
 	}
 
-	if (method == kMethodRequestOpenFile) {
-		const int fileType = payload.value(QStringLiteral("fileType")).toInt();
+	if (method == s_methodRequestOpenFile) {
+		const int file_type = payload.value(QStringLiteral("fileType")).toInt();
 		const QString source = payload.value(QStringLiteral("source")).toString().trimmed();
-		if (fileType != kQjpFileType || (source != QStringLiteral("local") && source != QStringLiteral("cloud"))) {
+		if (file_type != s_qjpFileType || (source != QStringLiteral("local") && source != QStringLiteral("cloud"))) {
 			QCefQuery invalidQuery = query;
-			invalidQuery.reply(false, QStringLiteral("Only desktop QJP files can be opened."), kDesktopQueryErrorBadRequest);
-			m_view->responseQCefQuery(invalidQuery);
+			invalidQuery.reply(false, QStringLiteral("Only desktop QJP files can be opened."), s_desktopQueryErrorBadRequest);
+			_view->responseQCefQuery(invalidQuery);
 			return;
 		}
 
@@ -319,8 +325,8 @@ void FileManagerView::OnCefQueryRequest(const QCefQuery& query)
 				invalidLocalQuery.reply(
 					false,
 					QStringLiteral("The local QJP file is invalid or cannot be opened."),
-					kDesktopQueryErrorBadRequest);
-				m_view->responseQCefQuery(invalidLocalQuery);
+					s_desktopQueryErrorBadRequest);
+				_view->responseQCefQuery(invalidLocalQuery);
 				return;
 			}
 
@@ -330,7 +336,7 @@ void FileManagerView::OnCefQueryRequest(const QCefQuery& query)
 				QString::fromUtf8(QJsonDocument(QJsonObject{
 													{ QStringLiteral("openedPath"), ResolveRecentLocalPath(payload) },
 					}).toJson(QJsonDocument::Compact)));
-			m_view->responseQCefQuery(successQuery);
+			_view->responseQCefQuery(successQuery);
 			return;
 		}
 
@@ -338,97 +344,97 @@ void FileManagerView::OnCefQueryRequest(const QCefQuery& query)
 		return;
 	}
 
-	if (method == kMethodRequestOpen) {
+	if (method == s_methodRequestOpen) {
 		emit OpenRequested();
 		QCefQuery successQuery = query;
 		successQuery.reply(true, QStringLiteral("{}"));
-		m_view->responseQCefQuery(successQuery);
+		_view->responseQCefQuery(successQuery);
 		return;
 	}
 
-	if (method == kMethodRequestNewProject) {
+	if (method == s_methodRequestNewProject) {
 		emit NewProjectRequested();
 		QCefQuery successQuery = query;
 		successQuery.reply(true, QStringLiteral("{}"));
-		m_view->responseQCefQuery(successQuery);
+		_view->responseQCefQuery(successQuery);
 		return;
 	}
 
-	if (method == kMethodRequestReturnToWorkspace) {
+	if (method == s_methodRequestReturnToWorkspace) {
 		emit ReturnToWorkspaceRequested();
 		QCefQuery successQuery = query;
 		successQuery.reply(true, QStringLiteral("{}"));
-		m_view->responseQCefQuery(successQuery);
+		_view->responseQCefQuery(successQuery);
 		return;
 	}
 
 	QCefQuery unsupportedQuery = query;
-	unsupportedQuery.reply(false, QStringLiteral("Unsupported desktop query method."), kDesktopQueryErrorBadRequest);
-	m_view->responseQCefQuery(unsupportedQuery);
+	unsupportedQuery.reply(false, QStringLiteral("Unsupported desktop query method."), s_desktopQueryErrorBadRequest);
+	_view->responseQCefQuery(unsupportedQuery);
 }
 
 void FileManagerView::HandleDesktopLoginRequest(const QCefQuery* query)
 {
-	if (!m_authService) {
+	if (!_authService) {
 		if (query) {
 			QCefQuery errorQuery = *query;
 			errorQuery.reply(false,
 				QStringLiteral("Desktop authentication service is unavailable."),
-				kDesktopQueryErrorInternal);
-			m_view->responseQCefQuery(errorQuery);
+				s_desktopQueryErrorInternal);
+			_view->responseQCefQuery(errorQuery);
 		}
 		return;
 	}
 
-	m_authService->ShowAccountAuthDialog(this);
-	if (m_authService->Session()->IsAuthenticated()) {
+	_authService->ShowAccountAuthDialog(this);
+	if (_authService->Session()->IsAuthenticated()) {
 		PushCurrentAuthStateToWeb();
 	}
 
-	if (query && m_view) {
+	if (query && _view) {
 		QCefQuery successQuery = *query;
 		successQuery.reply(true, QStringLiteral("{}"));
-		m_view->responseQCefQuery(successQuery);
+		_view->responseQCefQuery(successQuery);
 	}
 }
 
 void FileManagerView::RequestLocalFilesSnapshot(const QCefQuery* query)
 {
-	if (!m_snapshotWatcher) {
+	if (!_snapshotWatcher) {
 		return;
 	}
 
-	if (m_snapshotWatcher->isRunning()) {
-		if (query && m_view) {
+	if (_snapshotWatcher->isRunning()) {
+		if (query && _view) {
 			QCefQuery busyQuery = *query;
 			busyQuery.reply(false,
 				QStringLiteral("A desktop local files request is already running."),
-				kDesktopQueryErrorBusy);
-			m_view->responseQCefQuery(busyQuery);
+				s_desktopQueryErrorBusy);
+			_view->responseQCefQuery(busyQuery);
 		}
 		return;
 	}
 
 	if (query) {
-		m_pendingLocalFilesQuery = *query;
-		m_hasPendingLocalFilesQuery = true;
+		_pendingLocalFilesQuery = *query;
+		_hasPendingLocalFilesQuery = true;
 	}
 
-	m_snapshotWatcher->setFuture(QtConcurrent::run([]() {
+	_snapshotWatcher->setFuture(QtConcurrent::run([]() {
 		return LocalFilesSnapshot::ScanRoot();
 		}));
 }
 
 void FileManagerView::PushLocalFilesSnapshot(const LocalFilesSnapshot::Result& result)
 {
-	if (!m_view) {
-		m_hasPendingLocalFilesQuery = false;
+	if (!_view) {
+		_hasPendingLocalFilesQuery = false;
 		return;
 	}
 
-	if (m_hasPendingLocalFilesQuery) {
-		QCefQuery query = m_pendingLocalFilesQuery;
-		m_hasPendingLocalFilesQuery = false;
+	if (_hasPendingLocalFilesQuery) {
+		QCefQuery query = _pendingLocalFilesQuery;
+		_hasPendingLocalFilesQuery = false;
 
 		if (result.ok) {
 			const QJsonObject payload{
@@ -442,10 +448,10 @@ void FileManagerView::PushLocalFilesSnapshot(const LocalFilesSnapshot::Result& r
 			query.reply(false,
 				result.errorMessage.isEmpty() ? QStringLiteral("Failed to read desktop local files.")
 				: result.errorMessage,
-				kDesktopQueryErrorInternal);
+				s_desktopQueryErrorInternal);
 		}
 
-		m_view->responseQCefQuery(query);
+		_view->responseQCefQuery(query);
 		return;
 	}
 }
@@ -456,7 +462,7 @@ void FileManagerView::HandleOpenRecentFileRequest(const QVariantMap& payload, co
 		if (query) {
 			ReplyOpenRecentFileError(*query,
 				QStringLiteral("Only recent desktop QJP files can be opened here."),
-				kDesktopQueryErrorBadRequest);
+				 s_desktopQueryErrorBadRequest);
 		}
 		return;
 	}
@@ -472,7 +478,7 @@ void FileManagerView::HandleOpenRecentFileRequest(const QVariantMap& payload, co
 		if (query) {
 			ReplyOpenRecentFileError(*query,
 				QStringLiteral("The local QJP file is invalid or cannot be opened."),
-				kDesktopQueryErrorBadRequest);
+				 s_desktopQueryErrorBadRequest);
 		}
 		return;
 	}
@@ -483,90 +489,90 @@ void FileManagerView::HandleOpenRecentFileRequest(const QVariantMap& payload, co
 	}
 
 	if (query) {
-		ReplyOpenRecentFileError(*query, QStringLiteral("Unknown recent file source."), kDesktopQueryErrorBadRequest);
+		ReplyOpenRecentFileError(*query, QStringLiteral("Unknown recent file source."), s_desktopQueryErrorBadRequest);
 	}
 }
 
 bool FileManagerView::OpenRecentLocalFile(const QVariantMap& payload)
 {
-	const QString filePath = ResolveRecentLocalPath(payload);
-	const QFileInfo fileInfo(filePath);
-	if (!fileInfo.exists() || !fileInfo.isFile()
-		|| fileInfo.suffix().compare(QStringLiteral("qjp"), Qt::CaseInsensitive) != 0) {
+	const QString file_path = ResolveRecentLocalPath(payload);
+	const QFileInfo file_info(file_path);
+	if (!file_info.exists() || !file_info.isFile()
+		|| file_info.suffix().compare(QStringLiteral("qjp"), Qt::CaseInsensitive) != 0) {
 		return false;
 	}
 
-	emit OpenFileRequested(fileInfo.absoluteFilePath());
+	emit OpenFileRequested(file_info.absoluteFilePath());
 	return true;
 }
 
 void FileManagerView::OpenRecentCloudFile(const QVariantMap& payload, const QCefQuery* query)
 {
-	if (!m_cloudFileService) {
+	if (!_cloudFileService) {
 		if (query) {
 			ReplyOpenRecentFileError(*query,
 				QStringLiteral("Desktop cloud file service is unavailable."),
-				kDesktopQueryErrorInternal);
+				s_desktopQueryErrorInternal);
 		}
 		return;
 	}
 
-	const QString fileUuid = payload.value(QStringLiteral("fileUuid")).toString().trimmed();
-	if (fileUuid.isEmpty()) {
+	const QString file_uuid = payload.value(QStringLiteral("fileUuid")).toString().trimmed();
+	if (file_uuid.isEmpty()) {
 		if (query) {
 			ReplyOpenRecentFileError(*query,
 				QStringLiteral("Cloud recent file request is missing fileUuid."),
-				kDesktopQueryErrorBadRequest);
+				s_desktopQueryErrorBadRequest);
 		}
 		return;
 	}
 
 	if (query) {
-		if (m_hasPendingOpenRecentFileQuery) {
+		if (_hasPendingOpenRecentFileQuery) {
 			ReplyOpenRecentFileError(*query,
 				QStringLiteral("A desktop open recent file request is already running."),
-				kDesktopQueryErrorBusy);
+				s_desktopQueryErrorBusy);
 			return;
 		}
 
-		m_pendingOpenRecentFileQuery = *query;
-		m_hasPendingOpenRecentFileQuery = true;
+		_pendingOpenRecentFileQuery = *query;
+		_hasPendingOpenRecentFileQuery = true;
 	}
 
 	QPointer<FileManagerView> self(this);
-	QString errorMessage;
-	const bool started = m_cloudFileService->OpenCloudFile(
-		fileUuid,
+	QString error_message;
+	const bool started = _cloudFileService->OpenCloudFile(
+		file_uuid,
 		payload.value(QStringLiteral("fileName")).toString(),
-		[self](const QString& localFilePath, const QString& openedFileUuid, const QString& openErrorMessage) {
+		[self](const QString& local_file_path, const QString& opened_file_uuid, const QString& open_error_message) {
 			if (!self) {
 				return;
 			}
 
-			if (!openErrorMessage.isEmpty()) {
-				if (self->m_hasPendingOpenRecentFileQuery) {
-					const QCefQuery query = self->m_pendingOpenRecentFileQuery;
-					self->m_hasPendingOpenRecentFileQuery = false;
+			if (!open_error_message.isEmpty()) {
+				if (self->_hasPendingOpenRecentFileQuery) {
+					const QCefQuery query = self->_pendingOpenRecentFileQuery;
+					self->_hasPendingOpenRecentFileQuery = false;
 					self->ReplyOpenRecentFileError(
 						query,
-						openErrorMessage,
-						kDesktopQueryErrorInternal);
+						open_error_message,
+						s_desktopQueryErrorInternal);
 				}
 				return;
 			}
 
-			emit self->OpenCloudFileRequested(localFilePath, openedFileUuid);
-			if (self->m_hasPendingOpenRecentFileQuery) {
-				const QCefQuery query = self->m_pendingOpenRecentFileQuery;
-				self->m_hasPendingOpenRecentFileQuery = false;
-				self->ReplyOpenRecentFileSuccess(query, localFilePath);
+			emit self->OpenCloudFileRequested(local_file_path, opened_file_uuid);
+			if (self->_hasPendingOpenRecentFileQuery) {
+				const QCefQuery query = self->_pendingOpenRecentFileQuery;
+				self->_hasPendingOpenRecentFileQuery = false;
+				self->ReplyOpenRecentFileSuccess(query, local_file_path);
 			}
 		},
-		&errorMessage);
+		&error_message);
 
 	if (!started && query) {
-		m_hasPendingOpenRecentFileQuery = false;
-		ReplyOpenRecentFileError(*query, errorMessage, kDesktopQueryErrorBadRequest);
+		_hasPendingOpenRecentFileQuery = false;
+		ReplyOpenRecentFileError(*query, error_message, s_desktopQueryErrorBadRequest);
 	}
 }
 
@@ -577,9 +583,9 @@ QString FileManagerView::ResolveRecentLocalPath(const QVariantMap& payload) cons
 		return QDir::fromNativeSeparators(path);
 	}
 
-	const QString fileUuid = payload.value(QStringLiteral("fileUuid")).toString().trimmed();
-	if (fileUuid.startsWith(QStringLiteral("local::"))) {
-		return QDir::fromNativeSeparators(fileUuid.mid(QStringLiteral("local::").size()));
+	const QString file_uuid = payload.value(QStringLiteral("fileUuid")).toString().trimmed();
+	if (file_uuid.startsWith(QStringLiteral("local::"))) {
+		return QDir::fromNativeSeparators(file_uuid.mid(QStringLiteral("local::").size()));
 	}
 
 	return QString();
@@ -587,42 +593,44 @@ QString FileManagerView::ResolveRecentLocalPath(const QVariantMap& payload) cons
 
 bool FileManagerView::IsDesktopRecentRequest(const QVariantMap& payload) const
 {
-	const QString path = m_pageUrl.path().trimmed();
-	const bool isRecentRoute = path == QStringLiteral("/local-files") || path == QStringLiteral("/recent-files");
-	const bool fromRecent = payload.value(QStringLiteral("fromRecent")).toBool();
-	const int fileType = payload.value(QStringLiteral("fileType")).toInt();
+	const QString path = _pageUrl.path().trimmed();
+	const bool is_recent_route = path == QStringLiteral("/local-files") || path == QStringLiteral("/recent-files");
+	const bool from_recent = payload.value(QStringLiteral("fromRecent")).toBool();
+	const int file_type = payload.value(QStringLiteral("fileType")).toInt();
 	const QString source = payload.value(QStringLiteral("source")).toString().trimmed();
 
-	return isRecentRoute
-		&& fromRecent
-		&& fileType == kQjpFileType
+	return is_recent_route
+		&& from_recent
+		&& file_type == s_qjpFileType
 		&& (source == QStringLiteral("local") || source == QStringLiteral("cloud"));
 }
 
-void FileManagerView::ReplyOpenRecentFileError(const QCefQuery& query, const QString& message, int errorCode)
+void FileManagerView::ReplyOpenRecentFileError(const QCefQuery& query, const QString& message, int error_code)
 {
-	if (!m_view) {
+	if (!_view) {
 		return;
 	}
 
 	QCefQuery errorQuery = query;
-	errorQuery.reply(false, message, errorCode);
-	m_view->responseQCefQuery(errorQuery);
+	errorQuery.reply(false, message, error_code);
+	_view->responseQCefQuery(errorQuery);
 }
 
-void FileManagerView::ReplyOpenRecentFileSuccess(const QCefQuery& query, const QString& openedPath)
+void FileManagerView::ReplyOpenRecentFileSuccess(const QCefQuery& query, const QString& opened_path)
 {
-	if (!m_view) {
+	if (!_view) {
 		return;
 	}
 
 	const QJsonObject payload{
-		{ QStringLiteral("openedPath"), openedPath },
+		{ QStringLiteral("openedPath"), opened_path },
 	};
 	const QString json = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
 
 	QCefQuery successQuery = query;
 	successQuery.reply(true, json);
-	m_view->responseQCefQuery(successQuery);
+	_view->responseQCefQuery(successQuery);
 }
+
+QJ_NAMESPACE_FIT_CLOUD_SERVER_END
 

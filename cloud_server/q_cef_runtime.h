@@ -28,9 +28,9 @@ private:
 	/** 初始化 CEF 配置参数。 */
 	void InitConfig();
 	/** 保存 CEF 配置对象。 */
-	QCefConfig m_config;
+	QCefConfig _config;
 	/** 保存 CEF 上下文对象。 */
-	QPointer<QCefContext> m_context;
+	QPointer<QCefContext> _context;
 };
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END

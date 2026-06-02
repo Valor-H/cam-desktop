@@ -21,6 +21,13 @@ QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
 NMainWindow::NMainWindow(QWidget* parent)
 	: SARibbonMainWindow(parent)
+	, _actionDocument(nullptr)
+	, _actionNew(nullptr)
+	, _actionOpen(nullptr)
+	, _actionSave(nullptr)
+	, _homeWorkspace(nullptr)
+	, _toolLibDialog(nullptr)
+	, _cloudController(nullptr)
 {
 	ApplyWindowPresentation();
 
@@ -89,12 +96,12 @@ bool NMainWindow::SaveFile(bool silent)
 	return true;
 }
 
-bool NMainWindow::event(QEvent* e)
+bool NMainWindow::event(QEvent* event)
 {
 	if (_cloudController) {
-		_cloudController->HandleMainWindowEvent(e);
+		_cloudController->HandleMainWindowEvent(event);
 	}
-	return SARibbonMainWindow::event(e);
+	return SARibbonMainWindow::event(event);
 }
 
 void NMainWindow::InitializeMainWindowShell()
@@ -121,23 +128,23 @@ void NMainWindow::InitCentralWorkspace()
 
 void NMainWindow::InitRibbonBar()
 {
-	SARibbonBar* ribbonBarWidget = ribbonBar();
-	if (!ribbonBarWidget) {
+	SARibbonBar* ribbon_bar_widget = ribbonBar();
+	if (!ribbon_bar_widget) {
 		return;
 	}
 
-	ribbonBarWidget->setRibbonStyle(SARibbonBar::RibbonStyleLooseThreeRow);
-	ribbonBarWidget->setApplicationButton(nullptr);
+	ribbon_bar_widget->setRibbonStyle(SARibbonBar::RibbonStyleLooseThreeRow);
+	ribbon_bar_widget->setApplicationButton(nullptr);
 
-	if (SARibbonQuickAccessBar* quickAccessBar = ribbonBarWidget->quickAccessBar()) {
-		quickAccessBar->addAction(_actionDocument);
-		quickAccessBar->addAction(_actionNew);
-		quickAccessBar->addAction(_actionOpen);
-		quickAccessBar->addAction(_actionSave);
+	if (SARibbonQuickAccessBar* quick_access_bar = ribbon_bar_widget->quickAccessBar()) {
+		quick_access_bar->addAction(_actionDocument);
+		quick_access_bar->addAction(_actionNew);
+		quick_access_bar->addAction(_actionOpen);
+		quick_access_bar->addAction(_actionSave);
 	}
 
-	const auto makeAction = [this](const QString& text, QStyle::StandardPixmap iconType) {
-		auto* action = new QAction(style()->standardIcon(iconType), text, this);
+	const auto makeAction = [this](const QString& text, QStyle::StandardPixmap icon_type) {
+		QAction* action = new QAction(style()->standardIcon(icon_type), text, this);
 		connect(action, &QAction::triggered, this, [this, text]() {
 			if (statusBar()) {
 				statusBar()->showMessage(tr("Triggered: %1").arg(text), 2000);
@@ -146,17 +153,17 @@ void NMainWindow::InitRibbonBar()
 		return action;
 		};
 
-	const auto fillPanel = [](SARibbonPanel* panel, const QList<QAction*>& largeActions) {
+	const auto fillPanel = [](SARibbonPanel* panel, const QList<QAction*>& large_actions) {
 		if (!panel) {
 			return;
 		}
-		for (QAction* action : largeActions) {
+		for (QAction* action : large_actions) {
 			panel->addLargeAction(action);
 		}
 		};
 
-	SARibbonCategory* categoryFile = ribbonBarWidget->addCategoryPage(QStringLiteral("File"));
-	fillPanel(categoryFile->addPanel(QStringLiteral("Project")),
+	SARibbonCategory* category_file = ribbon_bar_widget->addCategoryPage(QStringLiteral("File"));
+	fillPanel(category_file->addPanel(QStringLiteral("Project")),
 		{
 			_actionDocument,
 			_actionNew,
@@ -164,15 +171,15 @@ void NMainWindow::InitRibbonBar()
 			_actionSave,
 		});
 
-	SARibbonCategory* categoryHome = ribbonBarWidget->addCategoryPage(QStringLiteral("Home"));
-	fillPanel(categoryHome->addPanel(QStringLiteral("Workspace")),
+	SARibbonCategory* category_home = ribbon_bar_widget->addCategoryPage(QStringLiteral("Home"));
+	fillPanel(category_home->addPanel(QStringLiteral("Workspace")),
 		{
 			makeAction(QStringLiteral("Recent Files"), QStyle::SP_FileDialogDetailedView),
 			makeAction(QStringLiteral("Local Files"), QStyle::SP_DirIcon),
 			makeAction(QStringLiteral("Resource Library"), QStyle::SP_ComputerIcon),
 			makeAction(QStringLiteral("View"), QStyle::SP_DesktopIcon),
 		});
-	fillPanel(categoryHome->addPanel(QStringLiteral("Common")),
+	fillPanel(category_home->addPanel(QStringLiteral("Common")),
 		{
 			makeAction(QStringLiteral("Options"), QStyle::SP_FileDialogContentsView),
 			makeAction(QStringLiteral("Layout"), QStyle::SP_TitleBarNormalButton),
@@ -180,7 +187,7 @@ void NMainWindow::InitRibbonBar()
 			makeAction(QStringLiteral("Help"), QStyle::SP_MessageBoxInformation),
 		});
 
-	ribbonBarWidget->setCurrentIndex(ribbonBarWidget->categoryIndex(categoryHome));
+	ribbon_bar_widget->setCurrentIndex(ribbon_bar_widget->categoryIndex(category_home));
 }
 
 void NMainWindow::OnShowToolLibDialog()

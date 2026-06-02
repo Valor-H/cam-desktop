@@ -23,7 +23,7 @@ class CLOUD_SERVER_EXPORT UserAuthService final : public QObject
 
 public:
 	/** 定义外部单点登录地址回调类型。 */
-	using WebSsoUrlCallback = std::function<void(const QUrl& url, const QString& errorMessage)>;
+	using WebSsoUrlCallback = std::function<void(const QUrl& url, const QString& error_message)>;
 	/** 构造用户认证服务。 */
 	explicit UserAuthService(const CloudServerConfig& cfg, QObject* parent = nullptr);
 	/** 析构用户认证服务。 */
@@ -51,7 +51,7 @@ public:
 	/** 处理窗口激活事件。 */
 	void OnWindowActivateEvent();
 	/** 构建外部网页登录单点登录地址。 */
-	void BuildExternalWebSsoUrl(const QString& redirectPath, WebSsoUrlCallback callback);
+	void BuildExternalWebSsoUrl(const QString& redirect_path, WebSsoUrlCallback callback);
 
 private slots:
 	/** 处理网页登录成功事件。 */
@@ -75,9 +75,9 @@ private:
 	/** 清除设置中的认证令牌。 */
 	void ClearAuthTokenFromSettings();
 	/** 直接使用令牌开始用户信息填充。 */
-	void StartDirectUserHydration(const QString& token, bool allowRefresh);
+	void StartDirectUserHydration(const QString& token, bool allow_refresh);
 	/** 直接获取当前用户信息。 */
-	void FetchCurrentUserDirect(const QString& token, bool allowRefresh);
+	void FetchCurrentUserDirect(const QString& token, bool allow_refresh);
 	/** 直接刷新令牌并重试请求。 */
 	void RefreshTokenDirectAndRetry(const QString& token);
 	/** 保存当前模块配置。 */
@@ -85,15 +85,15 @@ private:
 	/** 保存当前用户会话。 */
 	UserSession _userSession;
 	/** 保存认证 HTTP 客户端。 */
-	AuthHttpClient* _authClient{ nullptr };
+	AuthHttpClient* _authClient;
 	/** 保存跨进程认证同步通道。 */
-	LocalAuthSyncChannel* _authSyncChannel{ nullptr };
+	LocalAuthSyncChannel* _authSyncChannel;
 	/** 保存窗口激活刷新防抖定时器。 */
-	QTimer* _windowActivateRefreshDebounceTimer{ nullptr };
+	QTimer* _windowActivateRefreshDebounceTimer;
 	/** 记录上次窗口激活刷新时间。 */
 	QElapsedTimer _lastWindowActivateRefreshAt;
 	/** 标识用户信息填充是否正在进行。 */
-	bool _userHydrationInFlight{ false };
+	bool _userHydrationInFlight;
 };
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END

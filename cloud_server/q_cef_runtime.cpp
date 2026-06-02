@@ -13,13 +13,13 @@ QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 
 QCefRuntime& QCefRuntime::Instance()
 {
-	static QCefRuntime instance;
-	return instance;
+	static QCefRuntime s_instance;
+	return s_instance;
 }
 
 void QCefRuntime::Initialize()
 {
-	if (m_context) {
+	if (_context) {
 		return;
 	}
 
@@ -27,20 +27,20 @@ void QCefRuntime::Initialize()
 	// QCefContext is a QObject; when constructed with app it should follow Qt object ownership.
 	// Keep only a non-owning observer here to avoid double deletion at shutdown.
 	int argc = 0;
-	m_context = new QCefContext(qobject_cast<QApplication*>(qApp), argc, nullptr, &m_config);
+	_context = new QCefContext(qobject_cast<QApplication*>(qApp), argc, nullptr, &_config);
 }
 
 void QCefRuntime::InitConfig()
 {
-	m_config.setLogLevel(QCefConfig::LOGSEVERITY_DEFAULT);
+	_config.setLogLevel(QCefConfig::LOGSEVERITY_DEFAULT);
 	// Keep the bridge object so the web layer can subscribe to QCefEvent via CallBridge.addEventListener.
-	m_config.setBridgeObjectName(QStringLiteral("CallBridge"));
-	m_config.setBuiltinSchemeName(QStringLiteral("CefView"));
-	m_config.setRemoteDebuggingPort(0);
-	m_config.setWindowlessRenderingEnabled(true);
-	m_config.setStandaloneMessageLoopEnabled(true);
-	m_config.setSandboxDisabled(true);
-	m_config.setBackgroundColor(QColor(Qt::white));
+	_config.setBridgeObjectName(QStringLiteral("CallBridge"));
+	_config.setBuiltinSchemeName(QStringLiteral("CefView"));
+	_config.setRemoteDebuggingPort(0);
+	_config.setWindowlessRenderingEnabled(true);
+	_config.setStandaloneMessageLoopEnabled(true);
+	_config.setSandboxDisabled(true);
+	_config.setBackgroundColor(QColor(Qt::white));
 
 	const QString appDir = QCoreApplication::applicationDirPath();
 	const QString cefBundle = QDir(appDir).filePath(QStringLiteral("CefView"));
@@ -53,9 +53,9 @@ void QCefRuntime::InitConfig()
 		QDir().mkpath(instanceCachePath);
 	}
 
-	m_config.setResourceDirectoryPath(QDir(cefBundle).filePath(QStringLiteral("Resources")));
-	m_config.setLocalesDirectoryPath(QDir(cefBundle).filePath(QStringLiteral("locales")));
-	m_config.setCachePath(instanceCachePath);
+	_config.setResourceDirectoryPath(QDir(cefBundle).filePath(QStringLiteral("Resources")));
+	_config.setLocalesDirectoryPath(QDir(cefBundle).filePath(QStringLiteral("locales")));
+	_config.setCachePath(instanceCachePath);
 }
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END

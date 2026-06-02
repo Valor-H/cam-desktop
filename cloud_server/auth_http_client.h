@@ -37,28 +37,28 @@ public:
 	/** 定义文件下载完成回调类型。 */
 	using DownloadCallback = std::function<void(const DownloadResponse&)>;
 	/** 构造认证 HTTP 客户端。 */
-	explicit AuthHttpClient(const QString& baseUrl, QObject* parent = nullptr);
+	explicit AuthHttpClient(const QString& base_url, QObject* parent = nullptr);
 	/** 析构认证 HTTP 客户端。 */
 	~AuthHttpClient() override;
 	/** 发送不带请求体的 POST 请求。 */
 	void Post(const QString& path,
-		const QString& bearerToken,
-		int            timeoutSec,
+		const QString& bearer_token,
+		int            timeout_sec,
 		Callback       callback);
 	/** 发送 JSON POST 请求并将响应写入文件。 */
 	void PostJsonToFile(const QString& path,
-		const QString& bearerToken,
-		const QByteArray& jsonBody,
-		const QString& targetFilePath,
-		int timeoutSec,
+		const QString& bearer_token,
+		const QByteArray& json_body,
+		const QString& target_file_path,
+		int timeout_sec,
 		DownloadCallback callback);
 	/** 发送 multipart/form-data POST 请求上传文件。 */
 	void PostMultipartFile(const QString& path,
-		const QString& bearerToken,
-		const QString& fileFieldName,
-		const QString& filePath,
-		const QVariantMap& formFields,
-		int timeoutSec,
+		const QString& bearer_token,
+		const QString& file_field_name,
+		const QString& file_path,
+		const QVariantMap& form_fields,
+		int timeout_sec,
 		Callback callback);
 	/** 取消当前全部未完成请求。 */
 	void CancelAll();
@@ -67,7 +67,7 @@ private:
 	/** 保存服务端基础地址。 */
 	QString                                _baseUrl;
 	/** 维护 Qt 网络请求管理器。 */
-	class QNetworkAccessManager* _networkManager{ nullptr };
+	class QNetworkAccessManager* _networkManager;
 	/** 维护请求取消代次计数。 */
 	std::shared_ptr<std::atomic<quint64>>  _cancelEpoch;
 };

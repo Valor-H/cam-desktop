@@ -7,7 +7,7 @@ namespace
 	CamOptions g_camOptions;
 }
 
-CamOptions* CAMOptsPtr = &g_camOptions;
+CamOptions* g_camOptsPtr = &g_camOptions;
 
 std::string CamOptions::GetRecentFileList() const
 {

@@ -14,55 +14,55 @@ namespace LocalFilesSnapshot
 {
 	namespace
 	{
-		constexpr int kQjpFileType = 11;
+		constexpr int s_qjpFileType = 11;
 
-		QString toNativePath(const QString& path)
+		QString ToNativePath(const QString& path)
 		{
 			return QDir::toNativeSeparators(QDir(path).absolutePath());
 		}
 
-		QString normalizePath(const QString& path)
+		QString NormalizePath(const QString& path)
 		{
 			return QDir::fromNativeSeparators(path.trimmed());
 		}
 
-		QString toNativeFilePath(const QFileInfo& info)
+		QString ToNativeFilePath(const QFileInfo& info)
 		{
 			return QDir::toNativeSeparators(info.absoluteFilePath());
 		}
 
-		QStringList recentFilePaths()
+		QStringList RecentFilePaths()
 		{
-			if (!CAMOptsPtr) {
+			if (!g_camOptsPtr) {
 				return {};
 			}
 
-			const QString raw = QString::fromStdString(CAMOptsPtr->GetRecentFileList()).trimmed();
+			const QString raw = QString::fromStdString(g_camOptsPtr->GetRecentFileList()).trimmed();
 			if (raw.isEmpty()) {
 				return {};
 			}
 
 			QStringList files = raw.split(';', QString::SkipEmptyParts);
 			for (QString& file : files) {
-				file = normalizePath(file);
+				file = NormalizePath(file);
 			}
 			files.removeAll(QString());
 			return files;
 		}
 
-		QJsonObject toFileInfoObject(const QFileInfo& info)
+		QJsonObject ToFileInfoObject(const QFileInfo& info)
 		{
 			return QJsonObject{
 				{ QStringLiteral("children"), QJsonArray {} },
 				{ QStringLiteral("fileName"), info.fileName() },
-				{ QStringLiteral("fileType"), kQjpFileType },
-				{ QStringLiteral("fileUuid"), QStringLiteral("local::") + toNativeFilePath(info) },
+				{ QStringLiteral("fileType"), s_qjpFileType },
+				{ QStringLiteral("fileUuid"), QStringLiteral("local::") + ToNativeFilePath(info) },
 				{ QStringLiteral("lastModified"), info.lastModified().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")) },
 				{ QStringLiteral("link"), QJsonValue::Null },
 				{ QStringLiteral("owner"), QJsonValue::Null },
 				{ QStringLiteral("startTime"), QJsonValue::Null },
 				{ QStringLiteral("endTime"), QJsonValue::Null },
-				{ QStringLiteral("path"), toNativeFilePath(info) },
+				{ QStringLiteral("path"), ToNativeFilePath(info) },
 				{ QStringLiteral("permission"), QJsonValue::Null },
 				{ QStringLiteral("sharePermissionList"), QJsonValue::Null },
 				{ QStringLiteral("size"), static_cast<qint64>(info.size()) },
@@ -77,20 +77,20 @@ namespace LocalFilesSnapshot
 
 		result.rootPath.clear();
 
-		const QStringList recentFiles = recentFilePaths();
-		if (recentFiles.isEmpty()) {
+		const QStringList recent_files = RecentFilePaths();
+		if (recent_files.isEmpty()) {
 			result.ok = true;
 			return result;
 		}
 
 		QJsonArray files;
-		for (const QString& path : recentFiles) {
+		for (const QString& path : recent_files) {
 			const QFileInfo entry(path);
 			if (!entry.exists() || !entry.isReadable() || !entry.isFile()
 				|| entry.suffix().compare(QStringLiteral("qjp"), Qt::CaseInsensitive) != 0) {
 				continue;
 			}
-			files.append(toFileInfoObject(entry));
+			files.append(ToFileInfoObject(entry));
 		}
 
 		result.ok = true;

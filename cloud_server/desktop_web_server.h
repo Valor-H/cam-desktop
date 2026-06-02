@@ -13,7 +13,7 @@ class CLOUD_SERVER_EXPORT DesktopWebServer final : public QObject
 {
 public:
 	/** 构造桌面网页服务实例。 */
-	explicit DesktopWebServer(UserAuthService* authService, QObject* parent = nullptr);
+	explicit DesktopWebServer(UserAuthService* auth_service, QObject* parent = nullptr);
 	/** 析构桌面网页服务实例。 */
 	~DesktopWebServer() override;
 	/** 启动本地桌面网页服务。 */
@@ -29,7 +29,7 @@ private:
 	/** 构建桌面端运行时配置 JSON。 */
 	QString BuildRuntimeConfigJson() const;
 	/** 将请求路径解析为静态文件路径。 */
-	QString ResolveStaticFilePath(const QString& requestPath) const;
+	QString ResolveStaticFilePath(const QString& request_path) const;
 	/** 返回静态网页根目录路径。 */
 	QString WebRootPath() const;
 	/** 声明私有实现结构。 */
@@ -37,13 +37,13 @@ private:
 	/** 持有私有实现对象。 */
 	QScopedPointer<Private> d;
 	/** 保存认证服务实例。 */
-	UserAuthService* m_authService{ nullptr };
+	UserAuthService* _authService;
 	/** 标识 HTTP 服务是否已注册。 */
-	bool m_serviceRegistered{ false };
+	bool _serviceRegistered;
 	/** 标识服务是否已经启动。 */
-	bool m_started{ false };
+	bool _started;
 	/** 保存服务监听端口。 */
-	int m_port{ 31870 };
+	int _port;
 };
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END

@@ -2,7 +2,6 @@
 
 #include "ultramill_global.h"
 
-#include <cloud_server/cloud_file_service.h>
 #include <cloud_server/user_auth_service.h>
 
 #include <QObject>
@@ -12,10 +11,12 @@ class QEvent;
 class QMenu;
 class QUrl;
 class QWidget;
-class FileManagerView;
 
 QJ_NAMESPACE_BEGIN1(cloudserver)
+class CloudFileService;
+class UserAuthService;
 class DesktopWebServer;
+class FileManagerView;
 class TitleBarUserChip;
 QJ_NAMESPACE_END1
 
@@ -28,7 +29,7 @@ class CloudController final : public QObject
     Q_OBJECT
 
 public:
-    explicit CloudController(NMainWindow* mainWindow);
+     explicit CloudController(NMainWindow* main_window);
     ~CloudController() override;
 
     qianjizn::cloudserver::UserAuthService& UserAuth() { return _userAuth; }
@@ -47,29 +48,29 @@ signals:
     void DocumentOverlayVisibleChanged(bool visible);
 
 private:
-    bool EnsureDesktopWebServerReady(bool showWarning = true);
+    bool EnsureDesktopWebServerReady(bool show_warning = true);
     void InitUserChip();
     void RefreshUserChipFromSession();
     void SyncUserChipIntoTitleBar();
     void UpdateFileManagerOverlayGeometry();
     void OpenFileManager();
-    void ShowFileManagerWorkspace(const QUrl& pageUrl);
+    void ShowFileManagerWorkspace(const QUrl& page_url);
     void ShowAccountAuthDialog();
     void ShowAccountMenu();
     void Logout();
     void OpenPersonalProfile();
     void OpenTeam();
 
-    NMainWindow* _mainWindow { nullptr };
-    qianjizn::cloudserver::UserAuthService _userAuth { qianjizn::cloudserver::CloudServerConfig {} };
-    qianjizn::cloudserver::CloudFileService* _cloudFileService { nullptr };
-    qianjizn::cloudserver::DesktopWebServer* _desktopWebServer { nullptr };
-    FileManagerView* _fileManagerView { nullptr };
-    qianjizn::cloudserver::TitleBarUserChip* _userChip { nullptr };
-    QMenu* _loginMenu { nullptr };
-    QAction* _personalCenterAction { nullptr };
-    QAction* _teamAction { nullptr };
-    QAction* _logoutAction { nullptr };
+    NMainWindow* _mainWindow;
+    qianjizn::cloudserver::UserAuthService _userAuth;
+    qianjizn::cloudserver::CloudFileService* _cloudFileService;
+    qianjizn::cloudserver::DesktopWebServer* _desktopWebServer;
+    qianjizn::cloudserver::FileManagerView* _fileManagerView;
+    qianjizn::cloudserver::TitleBarUserChip* _userChip;
+    QMenu* _loginMenu;
+    QAction* _personalCenterAction;
+    QAction* _teamAction;
+    QAction* _logoutAction;
 };
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END

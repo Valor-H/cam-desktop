@@ -2,15 +2,18 @@
 
 namespace
 {
-	const QString kTokenKey = QStringLiteral("token");
-	const QString kUserKey = QStringLiteral("user");
-	const QString kLoggedInKey = QStringLiteral("loggedIn");
+	const QString s_tokenKey = QStringLiteral("token");
+	const QString s_userKey = QStringLiteral("user");
+	const QString s_loggedInKey = QStringLiteral("loggedIn");
 }
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 
 UserSession::UserSession(QObject* parent)
 	: QObject(parent)
+	, _authenticated(false)
+	, _authToken()
+	, _currentUser()
 {
 }
 
@@ -25,7 +28,7 @@ void UserSession::SetAuthenticatedState(bool on)
 
 void UserSession::ApplyFromLoginPayload(const QVariantMap& payload)
 {
-	const QString token = payload.value(kTokenKey).toString().trimmed();
+	const QString token = payload.value(s_tokenKey).toString().trimmed();
 	if (token.isEmpty()) {
 		_authToken.clear();
 		_currentUser.clear();
@@ -34,7 +37,7 @@ void UserSession::ApplyFromLoginPayload(const QVariantMap& payload)
 		return;
 	}
 
-	const QVariantMap user = payload.value(kUserKey).toMap();
+	const QVariantMap user = payload.value(s_userKey).toMap();
 	_authToken = token;
 	if (!user.isEmpty()) {
 		_currentUser = user;
@@ -45,8 +48,8 @@ void UserSession::ApplyFromLoginPayload(const QVariantMap& payload)
 
 void UserSession::ApplyFromProbe(const QVariantMap& data)
 {
-	const bool loggedIn = data.value(kLoggedInKey).toBool();
-	if (!loggedIn) {
+	const bool logged_in = data.value(s_loggedInKey).toBool();
+	if (!logged_in) {
 		_authToken.clear();
 		_currentUser.clear();
 		SetAuthenticatedState(false);
@@ -54,7 +57,7 @@ void UserSession::ApplyFromProbe(const QVariantMap& data)
 		return;
 	}
 
-	const QString token = data.value(kTokenKey).toString().trimmed();
+	const QString token = data.value(s_tokenKey).toString().trimmed();
 	_authToken = token;
 	_currentUser.clear();
 	SetAuthenticatedState(true);

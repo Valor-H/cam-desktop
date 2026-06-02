@@ -10,11 +10,11 @@ QJ_USING_NAMESPACE_FIT_CLOUD_SERVER
 
 namespace
 {
-	const char kAuthSyncEventKey[] = "event";
-	const char kAuthSyncAuthenticatedKey[] = "authenticated";
-	const char kAuthSyncEventValue[] = "auth-state-changed";
+	const char s_authSyncEventKey[] = "event";
+	const char s_authSyncAuthenticatedKey[] = "authenticated";
+	const char s_authSyncEventValue[] = "auth-state-changed";
 
-	QString buildAuthSyncServerName(const CloudServerConfig& cfg)
+	QString BuildAuthSyncServerName(const CloudServerConfig& cfg)
 	{
 		QString name = QStringLiteral("%1.%2.auth-sync")
 			.arg(cfg.settingsOrg.trimmed(), cfg.settingsApp.trimmed());
@@ -26,18 +26,18 @@ namespace
 		return name;
 	}
 
-	QByteArray buildAuthSyncPayload(bool authenticated)
+	QByteArray BuildAuthSyncPayload(bool authenticated)
 	{
 		QJsonObject root;
-		root.insert(QString::fromLatin1(kAuthSyncEventKey), QString::fromLatin1(kAuthSyncEventValue));
-		root.insert(QString::fromLatin1(kAuthSyncAuthenticatedKey), authenticated);
+		root.insert(QString::fromLatin1(s_authSyncEventKey), QString::fromLatin1(s_authSyncEventValue));
+		root.insert(QString::fromLatin1(s_authSyncAuthenticatedKey), authenticated);
 
 		QByteArray payload = QJsonDocument(root).toJson(QJsonDocument::Compact);
 		payload.append('\n');
 		return payload;
 	}
 
-	bool parseAuthSyncPayload(const QByteArray& payload, bool* authenticated)
+	bool ParseAuthSyncPayload(const QByteArray& payload, bool* authenticated)
 	{
 		if (!authenticated) {
 			return false;
@@ -49,16 +49,16 @@ namespace
 		}
 
 		const QJsonObject root = doc.object();
-		if (root.value(QString::fromLatin1(kAuthSyncEventKey)).toString()
-			!= QString::fromLatin1(kAuthSyncEventValue)) {
+		if (root.value(QString::fromLatin1(s_authSyncEventKey)).toString()
+			!= QString::fromLatin1(s_authSyncEventValue)) {
 			return false;
 		}
 
-		if (!root.contains(QString::fromLatin1(kAuthSyncAuthenticatedKey))) {
+		if (!root.contains(QString::fromLatin1(s_authSyncAuthenticatedKey))) {
 			return false;
 		}
 
-		*authenticated = root.value(QString::fromLatin1(kAuthSyncAuthenticatedKey)).toBool();
+		*authenticated = root.value(QString::fromLatin1(s_authSyncAuthenticatedKey)).toBool();
 		return true;
 	}
 }
@@ -69,9 +69,13 @@ LocalAuthSyncChannel::LocalAuthSyncChannel(const CloudServerConfig& cfg,
 	std::function<void(bool)> onAuthStateChanged,
 	QObject* parent)
 	: QObject(parent)
-	, _serverName(buildAuthSyncServerName(cfg))
+	, _serverName(BuildAuthSyncServerName(cfg))
 	, _server(new QLocalServer(this))
+	, _client(nullptr)
+	, _peers()
+	, _reconnectTimer(nullptr)
 	, _onAuthStateChanged(std::move(onAuthStateChanged))
+	, _ownsServer(false)
 {
 	_reconnectTimer = new QTimer(this);
 	_reconnectTimer->setSingleShot(true);
@@ -113,7 +117,7 @@ LocalAuthSyncChannel::LocalAuthSyncChannel(const CloudServerConfig& cfg,
 void LocalAuthSyncChannel::Broadcast(bool authenticated)
 {
 	if (_ownsServer) {
-		const auto peers = _peers;
+		const QList<QLocalSocket*> peers = _peers;
 		for (QLocalSocket* peer : peers) {
 			WriteMessage(peer, authenticated);
 		}
@@ -187,12 +191,12 @@ void LocalAuthSyncChannel::ResetClient()
 	_client = nullptr;
 }
 
-void LocalAuthSyncChannel::ScheduleReconnect(int delayMs)
+void LocalAuthSyncChannel::ScheduleReconnect(int delay_ms)
 {
 	if (_ownsServer || !_reconnectTimer) {
 		return;
 	}
-	_reconnectTimer->start(delayMs);
+	_reconnectTimer->start(delay_ms);
 }
 
 void LocalAuthSyncChannel::WriteMessage(QLocalSocket* socket, bool authenticated)
@@ -201,7 +205,7 @@ void LocalAuthSyncChannel::WriteMessage(QLocalSocket* socket, bool authenticated
 		return;
 	}
 
-	socket->write(buildAuthSyncPayload(authenticated));
+	socket->write(BuildAuthSyncPayload(authenticated));
 	socket->flush();
 }
 
@@ -213,12 +217,12 @@ void LocalAuthSyncChannel::ProcessMessages(QLocalSocket* socket, bool rebroadcas
 
 	while (socket->canReadLine()) {
 		bool authenticated = false;
-		if (!parseAuthSyncPayload(socket->readLine(), &authenticated)) {
+		if (!ParseAuthSyncPayload(socket->readLine(), &authenticated)) {
 			continue;
 		}
 
 		if (rebroadcast) {
-			const auto peers = _peers;
+			const QList<QLocalSocket*> peers = _peers;
 			for (QLocalSocket* peer : peers) {
 				if (peer == socket) {
 					continue;

@@ -1,5 +1,5 @@
 <RCC>
-    <qresource prefix="/ultramill">
-        <file>resource/avatar.png</file>
+    <qresource prefix="/FitMainWindow/Resource">
+        <file alias="user-circle-light.svg">resource/user-circle-light.svg</file>
     </qresource>
 </RCC>

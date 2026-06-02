@@ -19,14 +19,18 @@
 #include <QCefView.h>
 
 namespace {
-	const QString kMethodOnLoginSuccess = QStringLiteral("Desktop.OnLoginSuccess");
+	const QString s_methodOnLoginSuccess = QStringLiteral("Desktop.OnLoginSuccess");
 }
 
+QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
+
 AccountAuthDialog::AccountAuthDialog(
-	QWidget* parent, const QUrl& authPageUrl, qianjizn::cloudserver::UserAuthService* authService)
+	QWidget* parent, const QUrl& auth_page_url, UserAuthService* auth_service)
 	: QDialog(parent)
-	, m_authPageUrl(authPageUrl)
-	, m_authService(authService)
+	, _view(nullptr)
+	, _currentUrl()
+	, _authPageUrl(auth_page_url)
+	, _authService(auth_service)
 {
 	setWindowTitle(tr("Login"));
 
@@ -39,41 +43,41 @@ AccountAuthDialog::AccountAuthDialog(
 		setPalette(pal);
 	}
 
-	auto* layout = new QVBoxLayout(this);
+	QVBoxLayout* layout = new QVBoxLayout(this);
 	layout->setContentsMargins(0, 0, 0, 0);
 
-	const QString startUrl = m_authPageUrl.toString();
-	m_currentUrl = m_authPageUrl;
+	const QString start_url = _authPageUrl.toString();
+	_currentUrl = _authPageUrl;
 
 	QCefSetting setting;
 	setting.setBackgroundColor(QColor(Qt::white));
-	m_view = new QCefView(startUrl, &setting, this);
-	m_view->setAutoFillBackground(true);
-	m_view->setPalette(palette());
+	_view = new QCefView(start_url, &setting, this);
+	_view->setAutoFillBackground(true);
+	_view->setPalette(palette());
 
-	layout->addWidget(m_view);
+	layout->addWidget(_view);
 
-	connect(m_view,
+	connect(_view,
 		&QCefView::loadStart,
 		this,
-		[this](const QCefBrowserId&, const QCefFrameId&, bool isMainFrame, int) {
-			if (isMainFrame) {
+		[this](const QCefBrowserId&, const QCefFrameId&, bool is_main_frame, int) {
+			if (is_main_frame) {
 				OnLoadStart();
 			}
 		});
-	connect(m_view,
+	connect(_view,
 		&QCefView::addressChanged,
 		this,
 		[this](const QCefFrameId&, const QString& url) { OnAddressChanged(url); });
-	connect(m_view,
+	connect(_view,
 		&QCefView::loadEnd,
 		this,
-		[this](const QCefBrowserId&, const QCefFrameId&, bool isMainFrame, int httpStatusCode) {
-			if (isMainFrame) {
-				OnLoadEnd(httpStatusCode);
+		[this](const QCefBrowserId&, const QCefFrameId&, bool is_main_frame, int http_status_code) {
+			if (is_main_frame) {
+				OnLoadEnd(http_status_code);
 			}
 		});
-	connect(m_view,
+	connect(_view,
 		&QCefView::cefQueryRequest,
 		this,
 		[this](const QCefBrowserId&, const QCefFrameId&, const QCefQuery& query) {
@@ -87,12 +91,12 @@ AccountAuthDialog::~AccountAuthDialog()
 
 void AccountAuthDialog::InjectDesktopRuntime()
 {
-	qianjizn::cloudserver::InjectDesktopRuntimeIntoView(m_view, m_authService, m_currentUrl.toString());
+	InjectDesktopRuntimeIntoView(_view, _authService, _currentUrl.toString());
 }
 
 bool AccountAuthDialog::IsTrustedUiSource() const
 {
-	return LoginWebAuth::IsTrustedUiSource(m_currentUrl, m_authPageUrl);
+	return LoginWebAuth::IsTrustedUiSource(_currentUrl, _authPageUrl);
 }
 
 void AccountAuthDialog::HandleAuthSucceeded(const QVariantMap& payload)
@@ -113,7 +117,7 @@ void AccountAuthDialog::OnLoadStart()
 
 void AccountAuthDialog::UpdateUiFromUrl(const QUrl& url)
 {
-	m_currentUrl = url;
+	_currentUrl = url;
 	if (!IsTrustedUiSource()) {
 		return;
 	}
@@ -123,50 +127,50 @@ void AccountAuthDialog::UpdateUiFromUrl(const QUrl& url)
 void AccountAuthDialog::SyncWindowTitleFromCurrentUrl()
 {
 	using LoginWebAuth::AuthRoute;
-	const AuthRoute route = LoginWebAuth::RouteFromPath(LoginWebAuth::ExtractAuthRoutePath(m_currentUrl));
+	const AuthRoute route = LoginWebAuth::RouteFromPath(LoginWebAuth::ExtractAuthRoutePath(_currentUrl));
 	switch (route) {
-	case AuthRoute::Register:
+	case AuthRoute::REGISTER:
 		setWindowTitle(tr("Register"));
 		return;
-	case AuthRoute::Reset:
+	case AuthRoute::RESET:
 		setWindowTitle(tr("Reset password"));
 		return;
-	case AuthRoute::Login:
-	case AuthRoute::Unknown:
+	case AuthRoute::LOGIN:
+	case AuthRoute::UNKNOWN:
 	default:
 		setWindowTitle(tr("Login"));
 		return;
 	}
 }
 
-void AccountAuthDialog::OnLoadEnd(int httpStatusCode)
+void AccountAuthDialog::OnLoadEnd(int http_status_code)
 {
-	Q_UNUSED(httpStatusCode);
+	Q_UNUSED(http_status_code);
 	InjectDesktopRuntime();
-	UpdateUiFromUrl(m_currentUrl);
+	UpdateUiFromUrl(_currentUrl);
 }
 
 void AccountAuthDialog::OnCefQueryRequest(const QCefQuery& query)
 {
-	if (!m_view || !LoginWebAuth::IsTrustedInvokeSource(m_currentUrl, m_authPageUrl)) {
+	if (!_view || !LoginWebAuth::IsTrustedInvokeSource(_currentUrl, _authPageUrl)) {
 		return;
 	}
 
 	QString method;
 	QVariantMap payload;
-	const QByteArray rawRequest = query.request().toUtf8();
-	QJsonParseError parseError{};
-	const QJsonDocument document = QJsonDocument::fromJson(rawRequest, &parseError);
-	if (parseError.error == QJsonParseError::NoError && document.isObject()) {
-		const QJsonObject requestObject = document.object();
-		method = requestObject.value(QStringLiteral("method")).toString().trimmed();
-		payload = requestObject.value(QStringLiteral("payload")).toObject().toVariantMap();
+	const QByteArray raw_request = query.request().toUtf8();
+	QJsonParseError parse_error{};
+	const QJsonDocument document = QJsonDocument::fromJson(raw_request, &parse_error);
+	if (parse_error.error == QJsonParseError::NoError && document.isObject()) {
+		const QJsonObject request_object = document.object();
+		method = request_object.value(QStringLiteral("method")).toString().trimmed();
+		payload = request_object.value(QStringLiteral("payload")).toObject().toVariantMap();
 	}
 	else {
-		method = QString::fromUtf8(rawRequest).trimmed();
+		method = QString::fromUtf8(raw_request).trimmed();
 	}
 
-	if (method != kMethodOnLoginSuccess) {
+	if (method != s_methodOnLoginSuccess) {
 		return;
 	}
 
@@ -174,5 +178,7 @@ void AccountAuthDialog::OnCefQueryRequest(const QCefQuery& query)
 
 	QCefQuery successQuery = query;
 	successQuery.reply(true, QStringLiteral("{}"));
-	m_view->responseQCefQuery(successQuery);
+	_view->responseQCefQuery(successQuery);
 }
+
+QJ_NAMESPACE_FIT_CLOUD_SERVER_END

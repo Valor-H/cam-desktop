@@ -13,7 +13,6 @@ class QWidget;
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 class UserAuthService;
-QJ_NAMESPACE_FIT_CLOUD_SERVER_END
 
 class AccountAuthDialog : public QDialog
 {
@@ -22,7 +21,7 @@ class AccountAuthDialog : public QDialog
 public:
 	/** 构造账号认证对话框。 */
 	explicit AccountAuthDialog(
-		QWidget* parent, const QUrl& authPageUrl, qianjizn::cloudserver::UserAuthService* authService);
+		QWidget* parent, const QUrl& auth_page_url, UserAuthService* auth_service);
 	/** 析构账号认证对话框。 */
 	~AccountAuthDialog() override;
 
@@ -36,7 +35,7 @@ private slots:
 	/** 处理页面开始加载事件。 */
 	void OnLoadStart();
 	/** 处理页面加载完成事件。 */
-	void OnLoadEnd(int httpStatusCode);
+	void OnLoadEnd(int http_status_code);
 	/** 处理来自网页端的 CEF 查询请求。 */
 	void OnCefQueryRequest(const QCefQuery& query);
 
@@ -52,11 +51,13 @@ private:
 	/** 根据 URL 更新界面状态。 */
 	void UpdateUiFromUrl(const QUrl& url);
 	/** 内嵌认证页面的浏览器视图。 */
-	QCefView* m_view{ nullptr };
+	QCefView* _view;
 	/** 当前正在显示的页面 URL。 */
-	QUrl m_currentUrl;
+	QUrl _currentUrl;
 	/** 认证页面的初始 URL。 */
-	QUrl m_authPageUrl;
+	QUrl _authPageUrl;
 	/** 用户认证服务实例。 */
-	qianjizn::cloudserver::UserAuthService* m_authService{ nullptr };
+	UserAuthService* _authService;
 };
+
+QJ_NAMESPACE_FIT_CLOUD_SERVER_END

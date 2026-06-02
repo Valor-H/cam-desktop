@@ -32,19 +32,19 @@ private:
 	/** 重置当前客户端连接。 */
 	void ResetClient();
 	/** 安排一次延迟重连。 */
-	void ScheduleReconnect(int delayMs);
+	void ScheduleReconnect(int delay_ms);
 	/** 向指定连接写入同步消息。 */
 	void WriteMessage(QLocalSocket* socket, bool authenticated);
 	/** 处理收到的同步消息。 */
 	void ProcessMessages(QLocalSocket* socket, bool rebroadcast);
 
 	QString _serverName;
-	QLocalServer* _server{ nullptr };
-	QLocalSocket* _client{ nullptr };
+	QLocalServer* _server;
+	QLocalSocket* _client;
 	QList<QLocalSocket*> _peers;
-	QTimer* _reconnectTimer{ nullptr };
+	QTimer* _reconnectTimer;
 	std::function<void(bool)> _onAuthStateChanged;
-	bool _ownsServer{ false };
+	bool _ownsServer;
 };
 
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END

@@ -33,7 +33,7 @@ public:
     const qianjizn::cloudserver::UserAuthService& UserAuth() const;
 
 protected:
-    bool event(QEvent* e) override;
+    bool event(QEvent* event) override;
 
 private:
     void InitializeMainWindowShell();
@@ -46,13 +46,13 @@ private:
     void OnSave();
     void OnNewProject();
 
-    QAction* _actionDocument { nullptr };
-    QAction* _actionNew { nullptr };
-    QAction* _actionOpen { nullptr };
-    QAction* _actionSave { nullptr };
-    HomeWorkspace* _homeWorkspace { nullptr };
-    ToolLibDialog* _toolLibDialog { nullptr };
-    CloudController* _cloudController { nullptr };
+    QAction* _actionDocument;
+    QAction* _actionNew;
+    QAction* _actionOpen;
+    QAction* _actionSave;
+    HomeWorkspace* _homeWorkspace;
+    ToolLibDialog* _toolLibDialog;
+    CloudController* _cloudController;
 };
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END

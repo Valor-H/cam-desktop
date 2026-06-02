@@ -23,9 +23,18 @@ using qianjizn::cloudserver::UserSession;
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
-CloudController::CloudController(NMainWindow* mainWindow)
-	: QObject(mainWindow)
-	, _mainWindow(mainWindow)
+CloudController::CloudController(NMainWindow* main_window)
+	: QObject(main_window)
+	, _mainWindow(main_window)
+	, _userAuth(qianjizn::cloudserver::CloudServerConfig {})
+	, _cloudFileService(nullptr)
+	, _desktopWebServer(nullptr)
+	, _fileManagerView(nullptr)
+	, _userChip(nullptr)
+	, _loginMenu(nullptr)
+	, _personalCenterAction(nullptr)
+	, _teamAction(nullptr)
+	, _logoutAction(nullptr)
 {
 	connect(_userAuth.Session(), &UserSession::AuthStateChanged, this, &CloudController::RefreshUserChipFromSession);
 	connect(_userAuth.Session(), &UserSession::UserProfileChanged, this, &CloudController::RefreshUserChipFromSession);
@@ -54,8 +63,9 @@ void CloudController::HandleMainWindowEvent(QEvent* event)
 		}
 	}
 
-	if (event && (event->type() == QEvent::Move || event->type() == QEvent::Resize || event->type() == QEvent::LayoutRequest
-		|| event->type() == QEvent::Show)) {
+	if (event
+		&& (event->type() == QEvent::Move || event->type() == QEvent::Resize
+			|| event->type() == QEvent::LayoutRequest || event->type() == QEvent::Show)) {
 		UpdateFileManagerOverlayGeometry();
 	}
 }
@@ -95,7 +105,7 @@ void CloudController::SaveCloudFileIfNeeded()
 		return;
 	}
 
-	QString errorMessage;
+	QString error_message;
 	const bool started = _cloudFileService->SaveCurrentCloudFile(
 		[this](const AuthHttpClient::Response& response) {
 			if (!_mainWindow) {
@@ -120,10 +130,10 @@ void CloudController::SaveCloudFileIfNeeded()
 				_mainWindow->statusBar()->showMessage(tr("Cloud file saved."), 3000);
 			}
 		},
-		&errorMessage);
+		&error_message);
 
 	if (!started) {
-		QMessageBox::warning(_mainWindow, tr("Warning"), errorMessage);
+		QMessageBox::warning(_mainWindow, tr("Warning"), error_message);
 		return;
 	}
 
@@ -141,17 +151,17 @@ void CloudController::HideFileManagerView()
 	emit DocumentOverlayVisibleChanged(false);
 }
 
-bool CloudController::EnsureDesktopWebServerReady(bool showWarning)
+bool CloudController::EnsureDesktopWebServerReady(bool show_warning)
 {
 	if (!_desktopWebServer) {
-		if (showWarning && _mainWindow) {
+		if (show_warning && _mainWindow) {
 			QMessageBox::warning(_mainWindow, tr("Warning"), tr("Local embedded web server is unavailable."));
 		}
 		return false;
 	}
 
 	if (!_desktopWebServer->Start()) {
-		if (showWarning && _mainWindow) {
+		if (show_warning && _mainWindow) {
 			QMessageBox::warning(_mainWindow, tr("Warning"), tr("Local embedded web server failed to start."));
 		}
 		return false;
@@ -172,9 +182,9 @@ void CloudController::InitUserChip()
 		return;
 	}
 
-	QWidget* spacer = new QWidget(bar);
-	spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-	bar->addWidget(spacer);
+	QWidget* spacer_widget = new QWidget(bar);
+	spacer_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+	bar->addWidget(spacer_widget);
 
 	_userChip = new qianjizn::cloudserver::TitleBarUserChip(bar, _userAuth.ApiBaseUrl());
 	bar->addWidget(_userChip);
@@ -189,7 +199,10 @@ void CloudController::InitUserChip()
 	connect(_logoutAction, &QAction::triggered, this, &CloudController::Logout);
 	connect(_personalCenterAction, &QAction::triggered, this, &CloudController::OpenPersonalProfile, Qt::UniqueConnection);
 	connect(_teamAction, &QAction::triggered, this, &CloudController::OpenTeam, Qt::UniqueConnection);
-	connect(_userChip, &qianjizn::cloudserver::TitleBarUserChip::loginRequested, this, &CloudController::ShowAccountAuthDialog);
+	connect(_userChip,
+		&qianjizn::cloudserver::TitleBarUserChip::loginRequested,
+		this,
+		&CloudController::ShowAccountAuthDialog);
 	connect(
 		_userChip, &qianjizn::cloudserver::TitleBarUserChip::accountMenuRequested, this, &CloudController::ShowAccountMenu);
 }
@@ -216,16 +229,16 @@ void CloudController::SyncUserChipIntoTitleBar()
 		return;
 	}
 
-	int rowH = bar->windowTitleHeight();
-	if (QAbstractButton* minBtn = bar->minimizeButton()) {
-		const int minButtonHeight = minBtn->height();
-		if (minButtonHeight > 0) {
-			rowH = minButtonHeight;
+	int row_h = bar->windowTitleHeight();
+	if (QAbstractButton* min_button = bar->minimizeButton()) {
+		const int min_button_height = min_button->height();
+		if (min_button_height > 0) {
+			row_h = min_button_height;
 		}
 	}
 
-	const int minHeight = qianjizn::cloudserver::TitleBarUserChip::kAvatarButtonSide;
-	const int height = rowH > 0 ? qMax(rowH, minHeight) : minHeight;
+	const int min_height = qianjizn::cloudserver::TitleBarUserChip::s_avatarButtonSide;
+	const int height = row_h > 0 ? qMax(row_h, min_height) : min_height;
 	_userChip->setFixedHeight(height);
 	_userChip->RelayoutInParent();
 }
@@ -238,20 +251,20 @@ void CloudController::UpdateFileManagerOverlayGeometry()
 
 	constexpr int kOverlayResizeBorder = 2;
 
-	int overlayTop = 0;
+	int overlay_top = 0;
 	if (SARibbonSystemButtonBar* bar = _mainWindow->windowButtonBar()) {
-		overlayTop = bar->geometry().bottom() + 1;
-		if (overlayTop <= 0) {
-			overlayTop = bar->windowTitleHeight();
+		overlay_top = bar->geometry().bottom() + 1;
+		if (overlay_top <= 0) {
+			overlay_top = bar->windowTitleHeight();
 		}
 	}
 
-	overlayTop = qMax(0, overlayTop) + kOverlayResizeBorder;
-	const int overlayLeft = kOverlayResizeBorder;
-	const int overlayWidth = qMax(0, _mainWindow->width() - kOverlayResizeBorder * 2);
-	const int overlayHeight = qMax(0, _mainWindow->height() - overlayTop - kOverlayResizeBorder);
-	const QPoint topLeft = _mainWindow->mapToGlobal(QPoint(overlayLeft, overlayTop));
-	_fileManagerView->setGeometry(QRect(topLeft, QSize(overlayWidth, overlayHeight)));
+	overlay_top = qMax(0, overlay_top) + kOverlayResizeBorder;
+	const int overlay_left = kOverlayResizeBorder;
+	const int overlay_width = qMax(0, _mainWindow->width() - kOverlayResizeBorder * 2);
+	const int overlay_height = qMax(0, _mainWindow->height() - overlay_top - kOverlayResizeBorder);
+	const QPoint top_left = _mainWindow->mapToGlobal(QPoint(overlay_left, overlay_top));
+	_fileManagerView->setGeometry(QRect(top_left, QSize(overlay_width, overlay_height)));
 }
 
 void CloudController::OpenFileManager()
@@ -264,54 +277,54 @@ void CloudController::OpenFileManager()
 		return;
 	}
 
-	const QUrl pageUrl = qianjizn::cloudserver::buildRecentFilesUrl(_userAuth.FrontendBaseUrl());
-	ShowFileManagerWorkspace(pageUrl);
+	const QUrl page_url = qianjizn::cloudserver::BuildRecentFilesUrl(_userAuth.FrontendBaseUrl());
+	ShowFileManagerWorkspace(page_url);
 }
 
-void CloudController::ShowFileManagerWorkspace(const QUrl& pageUrl)
+void CloudController::ShowFileManagerWorkspace(const QUrl& page_url)
 {
 	if (!_mainWindow || !_mainWindow->centralWidget()) {
 		return;
 	}
 
 	if (!_fileManagerView) {
-		_fileManagerView = new FileManagerView(_mainWindow, &_userAuth, _cloudFileService, pageUrl);
-		connect(_fileManagerView, &FileManagerView::OpenFileRequested, this, [this](const QString& filePath) {
+		_fileManagerView = new qianjizn::cloudserver::FileManagerView(_mainWindow, &_userAuth, _cloudFileService, page_url);
+		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::OpenFileRequested, this, [this](const QString& file_path) {
 			HideFileManagerView();
 			if (!_mainWindow) {
 				return;
 			}
 
-			const bool opened = _mainWindow->OpenFile(filePath, QString(), false);
+			const bool opened = _mainWindow->OpenFile(file_path, QString(), false);
 			if (!opened) {
 				return;
 			}
 
 			if (_cloudFileService) {
-				_cloudFileService->TrackOpenedLocalFile(filePath);
+				_cloudFileService->TrackOpenedLocalFile(file_path);
 			}
 			});
 		connect(_fileManagerView,
-			&FileManagerView::OpenCloudFileRequested,
+			&qianjizn::cloudserver::FileManagerView::OpenCloudFileRequested,
 			this,
-			[this](const QString& filePath, const QString& fileUuid) {
+			[this](const QString& file_path, const QString& file_uuid) {
 				HideFileManagerView();
 				if (!_mainWindow) {
 					return;
 				}
 
-				const bool opened = _mainWindow->OpenFile(filePath, QString(), false);
+				const bool opened = _mainWindow->OpenFile(file_path, QString(), false);
 				if (!opened) {
 					return;
 				}
 
 				if (_cloudFileService) {
-					_cloudFileService->TrackOpenedCloudFile(filePath, fileUuid);
+					_cloudFileService->TrackOpenedCloudFile(file_path, file_uuid);
 				}
 			});
-		connect(_fileManagerView, &FileManagerView::OpenRequested, this, &CloudController::OpenRequested);
-		connect(_fileManagerView, &FileManagerView::NewProjectRequested, this, &CloudController::NewProjectRequested);
-		connect(_fileManagerView, &FileManagerView::ReturnToWorkspaceRequested, this, &CloudController::HideFileManagerView);
+		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::OpenRequested, this, &CloudController::OpenRequested);
+		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::NewProjectRequested, this, &CloudController::NewProjectRequested);
+		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::ReturnToWorkspaceRequested, this, &CloudController::HideFileManagerView);
 	}
 	else {
 		_fileManagerView->RefreshCurrentPage();
@@ -349,8 +362,8 @@ void CloudController::ShowAccountMenu()
 		return;
 	}
 
-	const QPoint pos = _userChip->mapToGlobal(QPoint(0, _userChip->height()));
-	_loginMenu->popup(pos);
+	const QPoint popup_pos = _userChip->mapToGlobal(QPoint(0, _userChip->height()));
+	_loginMenu->popup(popup_pos);
 }
 
 void CloudController::Logout()
@@ -365,13 +378,13 @@ void CloudController::OpenPersonalProfile()
 	}
 
 	_userAuth.BuildExternalWebSsoUrl(QStringLiteral("/personal-profile"),
-		[this](const QUrl& url, const QString& errorMessage) {
-			if (!errorMessage.isEmpty() || !url.isValid()) {
+		[this](const QUrl& url, const QString& error_message) {
+			if (!error_message.isEmpty() || !url.isValid()) {
 				QMessageBox::warning(_mainWindow,
 					tr("Warning"),
-					errorMessage.isEmpty()
+					error_message.isEmpty()
 					? tr("Failed to open personal center.")
-					: errorMessage);
+					: error_message);
 				return;
 			}
 			QDesktopServices::openUrl(url);
@@ -384,10 +397,10 @@ void CloudController::OpenTeam()
 		return;
 	}
 
-	_userAuth.BuildExternalWebSsoUrl(QStringLiteral("/team"), [this](const QUrl& url, const QString& errorMessage) {
-		if (!errorMessage.isEmpty() || !url.isValid()) {
+	_userAuth.BuildExternalWebSsoUrl(QStringLiteral("/team"), [this](const QUrl& url, const QString& error_message) {
+		if (!error_message.isEmpty() || !url.isValid()) {
 			QMessageBox::warning(
-				_mainWindow, tr("Warning"), errorMessage.isEmpty() ? tr("Failed to open team page.") : errorMessage);
+				_mainWindow, tr("Warning"), error_message.isEmpty() ? tr("Failed to open team page.") : error_message);
 			return;
 		}
 		QDesktopServices::openUrl(url);

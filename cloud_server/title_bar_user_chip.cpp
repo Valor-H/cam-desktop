@@ -22,8 +22,8 @@ QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 
 namespace
 {
-	constexpr char kNeutralAvatarRes[] = ":/ultramill/resource/avatar.png";
-	constexpr int kAvatarDownloadTimeoutSec = 15;
+	constexpr char s_neutralAvatarRes[] = ":/FitMainWindow/Resource/user-circle-light.svg";
+	constexpr int s_avatarDownloadTimeoutSec = 15;
 
 	struct AvatarDownloadOutcome
 	{
@@ -37,11 +37,11 @@ namespace
 	QString BuildLibhvFailureMessage()
 	{
 		const char* backend = hssl_backend();
-		const QString backendName = backend ? QString::fromUtf8(backend).trimmed() : QString();
-		if (backendName.isEmpty()) {
+		const QString backend_name = backend ? QString::fromUtf8(backend).trimmed() : QString();
+		if (backend_name.isEmpty()) {
 			return QStringLiteral("libhv request failed");
 		}
-		return QStringLiteral("libhv request failed (ssl backend: %1)").arg(backendName);
+		return QStringLiteral("libhv request failed (ssl backend: %1)").arg(backend_name);
 	}
 
 	QString AvatarRibbonToolButtonStyleSheet()
@@ -56,12 +56,12 @@ namespace
 			"  padding: 0;""}");
 	}
 
-	AvatarDownloadOutcome BuildAvatarDownloadOutcome(const QString& requestUrl, const HttpResponsePtr& resp)
+	AvatarDownloadOutcome BuildAvatarDownloadOutcome(const QString& request_url, const HttpResponsePtr& resp)
 	{
 		AvatarDownloadOutcome outcome;
 		outcome.networkOk = resp != nullptr;
 		outcome.httpStatus = resp ? resp->status_code : 0;
-		outcome.requestUrl = requestUrl;
+		outcome.requestUrl = request_url;
 		outcome.errorMessage = resp ? QString() : BuildLibhvFailureMessage();
 		outcome.body = resp ? QByteArray::fromStdString(resp->body) : QByteArray();
 		return outcome;
@@ -69,13 +69,16 @@ namespace
 
 }
 
-TitleBarUserChip::TitleBarUserChip(QWidget* parent, const QUrl& apiBaseUrl)
+TitleBarUserChip::TitleBarUserChip(QWidget* parent, const QUrl& api_base_url)
 	: QWidget(parent)
-	, _apiBaseUrl(apiBaseUrl)
+	, _apiBaseUrl(api_base_url)
+	, _avatarButton(nullptr)
 	, _avatarRequestEpoch(std::make_shared<std::atomic<quint64>>(0))
+	, _loggedIn(false)
+	, _fallbackNickName()
 {
 	setCursor(Qt::PointingHandCursor);
-	setMinimumHeight(TitleBarUserChip::kAvatarButtonSide);
+	setMinimumHeight(TitleBarUserChip::s_avatarButtonSide);
 	setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
 	setAttribute(Qt::WA_TranslucentBackground, true);
 	setStyleSheet(QStringLiteral("TitleBarUserChip { background: transparent; }"));
@@ -85,8 +88,8 @@ TitleBarUserChip::TitleBarUserChip(QWidget* parent, const QUrl& apiBaseUrl)
 	_avatarButton->setAttribute(Qt::WA_StyledBackground, true);
 	_avatarButton->setStyleSheet(AvatarRibbonToolButtonStyleSheet());
 	_avatarButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-	_avatarButton->setIconSize(QSize(TitleBarUserChip::kAvatarIconSide, TitleBarUserChip::kAvatarIconSide));
-	_avatarButton->setFixedSize(QSize(TitleBarUserChip::kAvatarButtonSide, TitleBarUserChip::kAvatarButtonSide));
+	_avatarButton->setIconSize(QSize(TitleBarUserChip::s_avatarIconSide, TitleBarUserChip::s_avatarIconSide));
+	_avatarButton->setFixedSize(QSize(TitleBarUserChip::s_avatarButtonSide, TitleBarUserChip::s_avatarButtonSide));
 	_avatarButton->setFocusPolicy(Qt::NoFocus);
 	_avatarButton->setCursor(Qt::PointingHandCursor);
 	connect(_avatarButton, &QToolButton::clicked, this, [this]() {
@@ -98,7 +101,7 @@ TitleBarUserChip::TitleBarUserChip(QWidget* parent, const QUrl& apiBaseUrl)
 		}
 		});
 
-	auto* lay = new QHBoxLayout(this);
+	QHBoxLayout* lay = new QHBoxLayout(this);
 	lay->setContentsMargins(0, 0, 4, 0);
 	lay->setSpacing(0);
 	lay->setAlignment(Qt::AlignVCenter);
@@ -169,7 +172,7 @@ void TitleBarUserChip::SyncFromSession(const UserSession* session)
 void TitleBarUserChip::ApplyDefaultAvatar()
 {
 	_fallbackNickName.clear();
-	const QPixmap ph = LoadAvatarRaster(kNeutralAvatarRes, TitleBarUserChip::kAvatarIconSide * 2);
+	const QPixmap ph = LoadAvatarRaster(s_neutralAvatarRes, TitleBarUserChip::s_avatarIconSide * 2);
 	ApplyAvatarIcon(MakeCircularAvatar(ph));
 	_avatarButton->setToolTip(tr("Not logged in"));
 }
@@ -195,8 +198,8 @@ void TitleBarUserChip::ApplyLoggedInAppearance(const UserSession* session)
 		_avatarButton->setToolTip(tip.trimmed().isEmpty() ? QString() : tip);
 	}
 
-	const QPixmap loggedInPlaceholder = MakeCircularAvatar(
-		LoadAvatarRaster(kNeutralAvatarRes, TitleBarUserChip::kAvatarIconSide * 2));
+	const QPixmap logged_in_placeholder = MakeCircularAvatar(
+		LoadAvatarRaster(s_neutralAvatarRes, TitleBarUserChip::s_avatarIconSide * 2));
 
 	const QString raw = u.value(QStringLiteral("avatar")).toString().trimmed();
 	if (raw.isEmpty()) {
@@ -210,7 +213,7 @@ void TitleBarUserChip::ApplyLoggedInAppearance(const UserSession* session)
 		return;
 	}
 
-	ApplyAvatarIcon(loggedInPlaceholder);
+	ApplyAvatarIcon(logged_in_placeholder);
 	StartAvatarDownload(url);
 }
 
@@ -229,9 +232,9 @@ QUrl TitleBarUserChip::ResolveAvatarUrl(const QString& raw) const
 	return u;
 }
 
-QString TitleBarUserChip::PickInitialChar(const QString& nickName)
+QString TitleBarUserChip::PickInitialChar(const QString& nick_name)
 {
-	const QString nick = nickName.trimmed();
+	const QString nick = nick_name.trimmed();
 	if (nick.isEmpty()) {
 		return QString();
 	}
@@ -243,9 +246,9 @@ QString TitleBarUserChip::PickInitialChar(const QString& nickName)
 	return QString(c);
 }
 
-QPixmap TitleBarUserChip::MakeInitialAvatarWithRing(const QString& nickName) const
+QPixmap TitleBarUserChip::MakeInitialAvatarWithRing(const QString& nick_name) const
 {
-	const int side = TitleBarUserChip::kAvatarIconSide;
+	const int side = TitleBarUserChip::s_avatarIconSide;
 	QPixmap out(side, side);
 	out.fill(Qt::transparent);
 
@@ -260,14 +263,14 @@ QPixmap TitleBarUserChip::MakeInitialAvatarWithRing(const QString& nickName) con
 	f.setPixelSize(11);
 	painter.setFont(f);
 	painter.setPen(QColor(Qt::white));
-	painter.drawText(QRect(0, 0, side, side), Qt::AlignCenter, PickInitialChar(nickName));
+	painter.drawText(QRect(0, 0, side, side), Qt::AlignCenter, PickInitialChar(nick_name));
 	return out;
 }
 
-QPixmap TitleBarUserChip::LoadAvatarRaster(const char* resourcePath, int side)
+QPixmap TitleBarUserChip::LoadAvatarRaster(const char* resource_path, int side)
 {
 	QIcon icon;
-	icon.addFile(QString::fromUtf8(resourcePath), QSize(side, side));
+	icon.addFile(QString::fromUtf8(resource_path), QSize(side, side));
 	const QPixmap loaded = icon.pixmap(side, side);
 	if (loaded.isNull()) {
 		QPixmap px(side, side);
@@ -279,7 +282,7 @@ QPixmap TitleBarUserChip::LoadAvatarRaster(const char* resourcePath, int side)
 
 QPixmap TitleBarUserChip::MakeCircularAvatar(const QPixmap& source) const
 {
-	const int side = TitleBarUserChip::kAvatarIconSide;
+	const int side = TitleBarUserChip::s_avatarIconSide;
 	QPixmap out(side, side);
 	out.fill(Qt::transparent);
 	if (source.isNull()) {
@@ -305,24 +308,24 @@ void TitleBarUserChip::AbortAvatarRequest()
 
 void TitleBarUserChip::StartAvatarDownload(const QUrl& url)
 {
-	const quint64 requestId = _avatarRequestEpoch->load(std::memory_order_relaxed);
-	auto epochRef = _avatarRequestEpoch;
+	const quint64 request_id = _avatarRequestEpoch->load(std::memory_order_relaxed);
+	std::shared_ptr<std::atomic<quint64>> epoch_ref = _avatarRequestEpoch;
 	QPointer<TitleBarUserChip> self(this);
 
-	const QString requestUrl = url.toString(QUrl::FullyEncoded);
-	auto req = std::make_shared<HttpRequest>();
+	const QString request_url = url.toString(QUrl::FullyEncoded);
+	std::shared_ptr<HttpRequest> req = std::make_shared<HttpRequest>();
 	req->method = HTTP_GET;
-	req->url = requestUrl.toStdString();
-	req->timeout = kAvatarDownloadTimeoutSec;
+	req->url = request_url.toStdString();
+	req->timeout = s_avatarDownloadTimeoutSec;
 
-	requests::async(req, [epochRef, requestId, self, requestUrl](const HttpResponsePtr& resp) {
+	requests::async(req, [epoch_ref, request_id, self, request_url](const HttpResponsePtr& resp) {
 		QMetaObject::invokeMethod(
 			QCoreApplication::instance(),
-			[epochRef, requestId, self, outcome = BuildAvatarDownloadOutcome(requestUrl, resp)]() {
+			[epoch_ref, request_id, self, outcome = BuildAvatarDownloadOutcome(request_url, resp)]() {
 				if (!self) {
 					return;
 				}
-				if (epochRef->load(std::memory_order_relaxed) != requestId) {
+				if (epoch_ref->load(std::memory_order_relaxed) != request_id) {
 					return;
 				}
 
@@ -336,29 +339,29 @@ void TitleBarUserChip::StartAvatarDownload(const QUrl& url)
 		});
 }
 
-void TitleBarUserChip::ApplyAvatarDownloadResult(bool networkOk,
-	int httpStatus,
-	const QString& requestUrl,
-	const QString& errorMessage,
+void TitleBarUserChip::ApplyAvatarDownloadResult(bool network_ok,
+	int http_status,
+	const QString& request_url,
+	const QString& error_message,
 	const QByteArray& body)
 {
 	QPixmap loaded;
 
-	if (networkOk && httpStatus >= 200 && httpStatus < 300) {
+	if (network_ok && http_status >= 200 && http_status < 300) {
 		loaded.loadFromData(body);
 	}
 	else {
 		qWarning().noquote()
 			<< QStringLiteral("[TitleBarUserChip] avatar download failed: status=%1, url=%2, message=%3")
-			.arg(httpStatus)
-			.arg(requestUrl, errorMessage.isEmpty() ? QStringLiteral("http request failed") : errorMessage);
+			.arg(http_status)
+			.arg(request_url, error_message.isEmpty() ? QStringLiteral("http request failed") : error_message);
 	}
 
-	if (networkOk && httpStatus >= 200 && httpStatus < 300 && loaded.isNull()) {
+	if (network_ok && http_status >= 200 && http_status < 300 && loaded.isNull()) {
 		qWarning().noquote()
 			<< QStringLiteral("[TitleBarUserChip] avatar payload is not a valid image: status=%1, url=%2, bytes=%3")
-			.arg(httpStatus)
-			.arg(requestUrl)
+			.arg(http_status)
+			.arg(request_url)
 			.arg(body.size());
 	}
 
