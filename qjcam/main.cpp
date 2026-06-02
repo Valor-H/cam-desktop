@@ -6,17 +6,17 @@
 
 using namespace qianjizn::ultramill;
 
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
-    QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-    QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+	QApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+	QApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 
-    NApplication app(argc, argv);
-    QDir::setCurrent(QCoreApplication::applicationDirPath());
+	NApplication app(argc, argv);
+	QDir::setCurrent(QCoreApplication::applicationDirPath());
 
-    app.Initialize();
+	app.Initialize();
 
-    NMainWindow window;
-    window.showMaximized();
-    return app.exec();
+	NMainWindow window;
+	window.showMaximized();
+	return app.exec();
 }

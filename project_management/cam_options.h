@@ -8,7 +8,7 @@ QJ_NAMESPACE_CAM_PROJECT_MANAGEMENT_BEGIN
 class CamOptions
 {
 public:
-    std::string GetRecentFileList() const;
+	std::string GetRecentFileList() const;
 };
 
 extern CamOptions* CAMOptsPtr;
