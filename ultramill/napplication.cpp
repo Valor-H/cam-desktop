@@ -3,6 +3,7 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QFileInfo>
 #include <QTranslator>
 
 // Q_INIT_RESOURCE cannot be called inside a namespace; use a file-scope helper.
@@ -16,12 +17,14 @@ QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 NApplication::NApplication(int& argc, char** argv)
 	: QApplication(argc, argv)
 	, _cloudServerTranslator(nullptr)
+	, _ultramillTranslator(nullptr)
 {
 }
 
 NApplication::~NApplication()
 {
 	delete _cloudServerTranslator;
+	delete _ultramillTranslator;
 }
 
 void NApplication::Initialize()
@@ -39,19 +42,37 @@ void NApplication::LoadTranslations()
 		_cloudServerTranslator = nullptr;
 	}
 
-	const QString qm_path = QDir(QCoreApplication::applicationDirPath()).filePath(QStringLiteral("cloud_server_zh_CN.qm"));
-	if (!QFileInfo::exists(qm_path)) {
-		return;
+	if (_ultramillTranslator) {
+		removeTranslator(_ultramillTranslator);
+		delete _ultramillTranslator;
+		_ultramillTranslator = nullptr;
 	}
 
-	QTranslator* translator = new QTranslator(this);
-	if (!translator->load(qm_path)) {
-		delete translator;
-		return;
+	const QString app_dir = QCoreApplication::applicationDirPath();
+
+	const QString cloud_server_qm = QDir(app_dir).filePath(QStringLiteral("cloud_server_zh_CN.qm"));
+	if (QFileInfo::exists(cloud_server_qm)) {
+		QTranslator* translator = new QTranslator(this);
+		if (translator->load(cloud_server_qm)) {
+			installTranslator(translator);
+			_cloudServerTranslator = translator;
+		}
+		else {
+			delete translator;
+		}
 	}
 
-	installTranslator(translator);
-	_cloudServerTranslator = translator;
+	const QString ultramill_qm = QDir(app_dir).filePath(QStringLiteral("ultramill_zh_CN.qm"));
+	if (QFileInfo::exists(ultramill_qm)) {
+		QTranslator* translator = new QTranslator(this);
+		if (translator->load(ultramill_qm)) {
+			installTranslator(translator);
+			_ultramillTranslator = translator;
+		}
+		else {
+			delete translator;
+		}
+	}
 }
 
 void NApplication::InitCefRuntime()

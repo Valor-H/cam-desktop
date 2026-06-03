@@ -193,7 +193,7 @@ void CloudController::InitUserChip()
 
 	_loginMenu = new QMenu(_mainWindow);
 	_personalCenterAction = _loginMenu->addAction(tr("Personal center"));
-	_teamAction = _loginMenu->addAction(QStringLiteral("Team Management"));
+	_teamAction = _loginMenu->addAction(tr("Team Management"));
 	_logoutAction = _loginMenu->addAction(tr("Log out"));
 
 	connect(_logoutAction, &QAction::triggered, this, &CloudController::Logout);

@@ -20,6 +20,7 @@ private:
     static void InitCefRuntime();
 
     QTranslator* _cloudServerTranslator;
+    QTranslator* _ultramillTranslator;
 };
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END

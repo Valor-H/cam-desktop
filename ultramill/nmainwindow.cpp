@@ -31,7 +31,7 @@ NMainWindow::NMainWindow(QWidget* parent)
 {
 	ApplyWindowPresentation();
 
-	_actionDocument = new QAction(QStringLiteral("Document"), this);
+	_actionDocument = new QAction(tr("Document"), this);
 	_actionDocument->setCheckable(true);
 	_actionNew = new QAction(QIcon(), tr("New"), this);
 	_actionOpen = new QAction(QIcon(), tr("Open"), this);
