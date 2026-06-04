@@ -65,6 +65,12 @@ signals:
 	void NewProjectRequested();
 	/** 请求返回桌面工作台。 */
 	void ReturnToWorkspaceRequested();
+	/** 请求打开帮助文档。 */
+	void HelpDocRequested();
+	/** 请求查看使用许可。 */
+	void LicenseRequested();
+	/** 请求查看关于信息。 */
+	void AboutRequested();
 
 private:
 	/** 向网页注入桌面运行时对象。 */

@@ -46,7 +46,9 @@ private:
     void OnOpen();
     void OnSave();
     void OnNewProject();
-
+    void OnHelpDoc();
+    void OnAbout();
+    void OnLicense();
     QAction* _actionDocument;
     QAction* _actionNew;
     QAction* _actionOpen;

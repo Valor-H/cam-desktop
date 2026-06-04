@@ -398,6 +398,9 @@ void CloudController::ShowFileManagerWorkspace(const QUrl& page_url)
 		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::OpenRequested, this, &CloudController::OpenRequested);
 		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::NewProjectRequested, this, &CloudController::NewProjectRequested);
 		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::ReturnToWorkspaceRequested, this, &CloudController::HideFileManagerView);
+		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::HelpDocRequested, this, &CloudController::HelpDocRequested);
+		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::LicenseRequested, this, &CloudController::LicenseRequested);
+		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::AboutRequested, this, &CloudController::AboutRequested);
 	}
 	else {
 		_fileManagerView->RefreshCurrentPage();

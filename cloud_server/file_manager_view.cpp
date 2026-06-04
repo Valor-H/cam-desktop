@@ -43,6 +43,9 @@ namespace
 	const QString s_methodRequestOpen = QStringLiteral("Desktop.RequestOpen");
 	const QString s_methodRequestNewProject = QStringLiteral("Desktop.RequestNewProject");
 	const QString s_methodRequestReturnToWorkspace = QStringLiteral("Desktop.RequestReturnToWorkspace");
+	const QString s_methodRequestHelpDoc = QStringLiteral("Desktop.RequestHelpDoc");
+	const QString s_methodRequestLicense = QStringLiteral("Desktop.RequestLicense");
+	const QString s_methodRequestAbout = QStringLiteral("Desktop.RequestAbout");
 	const QString s_eventDesktopOnResume = QStringLiteral("Desktop.OnResume");
 
 	QString ApiBaseStringForClient(const QUrl& url)
@@ -362,6 +365,30 @@ void FileManagerView::OnCefQueryRequest(const QCefQuery& query)
 
 	if (method == s_methodRequestReturnToWorkspace) {
 		emit ReturnToWorkspaceRequested();
+		QCefQuery successQuery = query;
+		successQuery.reply(true, QStringLiteral("{}"));
+		_view->responseQCefQuery(successQuery);
+		return;
+	}
+
+	if (method == s_methodRequestHelpDoc) {
+		emit HelpDocRequested();
+		QCefQuery successQuery = query;
+		successQuery.reply(true, QStringLiteral("{}"));
+		_view->responseQCefQuery(successQuery);
+		return;
+	}
+
+	if (method == s_methodRequestLicense) {
+		emit LicenseRequested();
+		QCefQuery successQuery = query;
+		successQuery.reply(true, QStringLiteral("{}"));
+		_view->responseQCefQuery(successQuery);
+		return;
+	}
+
+	if (method == s_methodRequestAbout) {
+		emit AboutRequested();
 		QCefQuery successQuery = query;
 		successQuery.reply(true, QStringLiteral("{}"));
 		_view->responseQCefQuery(successQuery);

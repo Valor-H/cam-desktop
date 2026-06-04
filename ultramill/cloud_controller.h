@@ -47,6 +47,9 @@ signals:
     void OpenRequested();
     void NewProjectRequested();
     void DocumentOverlayVisibleChanged(bool visible);
+    void HelpDocRequested();
+    void LicenseRequested();
+    void AboutRequested();
 
 private:
     enum class SyncStatusVisual {

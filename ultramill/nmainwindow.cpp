@@ -82,6 +82,9 @@ void NMainWindow::InitCloudController()
 		});
 	connect(_cloudController, &CloudController::OpenRequested, this, &NMainWindow::OnOpen);
 	connect(_cloudController, &CloudController::NewProjectRequested, this, &NMainWindow::OnNewProject);
+	connect(_cloudController, &CloudController::HelpDocRequested, this, &NMainWindow::OnHelpDoc);
+	connect(_cloudController, &CloudController::LicenseRequested, this, &NMainWindow::OnLicense);
+	connect(_cloudController, &CloudController::AboutRequested, this, &NMainWindow::OnAbout);
 }
 
 bool NMainWindow::OpenFile(const QString& file_name, const QString& backup_file, bool silent)
@@ -316,4 +319,21 @@ void NMainWindow::OnNewProject()
 	}
 }
 
+void NMainWindow::OnHelpDoc()
+{
+	qDebug() << "HelpDoc";
+	return;
+}
+
+void NMainWindow::OnAbout()
+{
+	qDebug() << "About";
+	return;
+}
+
+void NMainWindow::OnLicense()
+{
+	qDebug() << "License";
+	return;
+}
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END
