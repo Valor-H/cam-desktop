@@ -59,13 +59,14 @@ namespace LocalFilesSnapshot
 				{ QStringLiteral("fileUuid"), QStringLiteral("local::") + ToNativeFilePath(info) },
 				{ QStringLiteral("lastModified"), info.lastModified().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")) },
 				{ QStringLiteral("link"), QJsonValue::Null },
+				{ QStringLiteral("localPath"), ToNativeFilePath(info) },
 				{ QStringLiteral("owner"), QJsonValue::Null },
 				{ QStringLiteral("startTime"), QJsonValue::Null },
 				{ QStringLiteral("endTime"), QJsonValue::Null },
-				{ QStringLiteral("path"), ToNativeFilePath(info) },
 				{ QStringLiteral("permission"), QJsonValue::Null },
 				{ QStringLiteral("sharePermissionList"), QJsonValue::Null },
 				{ QStringLiteral("size"), static_cast<qint64>(info.size()) },
+				{ QStringLiteral("source"), QStringLiteral("local") },
 				{ QStringLiteral("thumbnailImage"), QString() },
 			};
 		}

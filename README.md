@@ -11,8 +11,7 @@
 | Qt 5.15.2 | `D:/Tools/QT5/5.15.2/msvc2019_64` |
 | QCefView | `./3rdparty/QCefView` |
 | SARibbonBar | `./3rdparty/SARibbon` |
-| libhv Debug | `./3rdparty/libhv/Debug` |
-| libhv Release | `./3rdparty/libhv/Release` |
+| libhv Debug | `./3rdparty/libhv` |
 
 关键配置见 [CMakeLists.txt](CMakeLists.txt)。
 
@@ -21,7 +20,7 @@
 在 `cam-desktop` 目录执行：
 
 ```cmd
-cmake -S . -B build -G "Visual Studio 16 2019" -A x64
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Debug
 cmake --build build --config Release
 ```

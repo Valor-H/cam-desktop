@@ -10,21 +10,22 @@ QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
 class HomeWorkspace : public QWidget
 {
-    Q_OBJECT
+	Q_OBJECT
 
 public:
-    explicit HomeWorkspace(QWidget* parent = nullptr);
-    ~HomeWorkspace() override;
-    void SetViewportText(const QString& text);
-    void SetViewportFilePath(const QString& file_path);
-    void ClearViewport();
+	explicit HomeWorkspace(QWidget* parent = nullptr);
+	~HomeWorkspace() override;
+	void SetViewportText(const QString& text);
+	QString ViewportText() const;
+	void SetViewportFilePath(const QString& file_path);
+	void ClearViewport();
 
 signals:
-    void NewProjectRequested();
-    void ToolLibRequested();
+	void NewProjectRequested();
+	void ToolLibRequested();
 
 private:
-    QPlainTextEdit* _viewportEditor;
+	QPlainTextEdit* _viewportEditor;
 };
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END

@@ -45,6 +45,8 @@ public:
 	void RefreshCurrentPage();
 	/** 立即同步嵌入视图区域大小。 */
 	void SyncViewportGeometryNow();
+	/** 通知网页端最近文件列表已变化。 */
+	void NotifyRecentFilesChanged();
 
 protected:
 	/** 处理部件事件分发。 */

@@ -10,17 +10,17 @@ QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 class NApplication : public QApplication
 {
 public:
-    NApplication(int& argc, char** argv);
-    ~NApplication() override;
+	NApplication(int& argc, char** argv);
+	~NApplication() override;
 
-    void Initialize();
+	void Initialize();
 
 private:
-    void LoadTranslations();
-    static void InitCefRuntime();
+	void LoadTranslations();
+	static void InitCefRuntime();
 
-    QTranslator* _cloudServerTranslator;
-    QTranslator* _ultramillTranslator;
+	QTranslator* _cloudServerTranslator;
+	QTranslator* _ultramillTranslator;
 };
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END

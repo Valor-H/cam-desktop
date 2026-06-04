@@ -1,6 +1,7 @@
 #include "cloud_controller.h"
 
 #include "nmainwindow.h"
+#include "workspace_file_context.h"
 
 #include <cloud_server/desktop_web.h>
 #include <cloud_server/desktop_web_server.h>
@@ -28,7 +29,7 @@ QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 CloudController::CloudController(NMainWindow* main_window)
 	: QObject(main_window)
 	, _mainWindow(main_window)
-	, _userAuth(qianjizn::cloudserver::CloudServerConfig {})
+	, _userAuth(qianjizn::cloudserver::CloudServerConfig{})
 	, _cloudFileService(nullptr)
 	, _desktopWebServer(nullptr)
 	, _fileManagerView(nullptr)
@@ -90,6 +91,11 @@ void CloudController::PrepareForLocalOpen()
 	HideFileManagerView();
 	if (_cloudFileService) {
 		_cloudFileService->ClearCurrentFile();
+	}
+	if (_mainWindow) {
+		WorkspaceFileContext context;
+		context.source = WorkspaceFileSource::Local;
+		_mainWindow->SetNextFileContext(context);
 	}
 	SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
 }
@@ -156,6 +162,13 @@ void CloudController::HideFileManagerView()
 	}
 
 	emit DocumentOverlayVisibleChanged(false);
+}
+
+void CloudController::NotifyRecentFilesChanged()
+{
+	if (_fileManagerView) {
+		_fileManagerView->NotifyRecentFilesChanged();
+	}
 }
 
 bool CloudController::EnsureDesktopWebServerReady(bool show_warning)
@@ -366,6 +379,11 @@ void CloudController::ShowFileManagerWorkspace(const QUrl& page_url)
 				return;
 			}
 
+			WorkspaceFileContext context;
+			context.filePath = file_path;
+			context.source = WorkspaceFileSource::Local;
+			context.fromRecent = true;
+			_mainWindow->SetNextFileContext(context);
 			const bool opened = _mainWindow->OpenFile(file_path, QString(), false);
 			if (!opened) {
 				return;
@@ -385,6 +403,12 @@ void CloudController::ShowFileManagerWorkspace(const QUrl& page_url)
 					return;
 				}
 
+				WorkspaceFileContext context;
+				context.filePath = file_path;
+				context.fileUuid = file_uuid;
+				context.source = WorkspaceFileSource::Cloud;
+				context.fromRecent = true;
+				_mainWindow->SetNextFileContext(context);
 				const bool opened = _mainWindow->OpenFile(file_path, QString(), false);
 				if (!opened) {
 					return;

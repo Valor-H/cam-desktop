@@ -3,6 +3,7 @@
 #include "desktop_runtime_injection.h"
 #include "local_files_snapshot.h"
 #include "user_auth_service.h"
+#include <project_management/cam_options.h>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -47,6 +48,7 @@ namespace
 	const QString s_methodRequestLicense = QStringLiteral("Desktop.RequestLicense");
 	const QString s_methodRequestAbout = QStringLiteral("Desktop.RequestAbout");
 	const QString s_eventDesktopOnResume = QStringLiteral("Desktop.OnResume");
+	const QString s_eventDesktopLocalRecentFilesChanged = QStringLiteral("Desktop.LocalRecentFilesChanged");
 
 	QString ApiBaseStringForClient(const QUrl& url)
 	{
@@ -605,9 +607,9 @@ void FileManagerView::OpenRecentCloudFile(const QVariantMap& payload, const QCef
 
 QString FileManagerView::ResolveRecentLocalPath(const QVariantMap& payload) const
 {
-	const QString path = payload.value(QStringLiteral("path")).toString().trimmed();
-	if (!path.isEmpty()) {
-		return QDir::fromNativeSeparators(path);
+	const QString local_path = payload.value(QStringLiteral("localPath")).toString().trimmed();
+	if (!local_path.isEmpty()) {
+		return QDir::fromNativeSeparators(local_path);
 	}
 
 	const QString file_uuid = payload.value(QStringLiteral("fileUuid")).toString().trimmed();
@@ -659,5 +661,20 @@ void FileManagerView::ReplyOpenRecentFileSuccess(const QCefQuery& query, const Q
 	_view->responseQCefQuery(successQuery);
 }
 
-QJ_NAMESPACE_FIT_CLOUD_SERVER_END
+void FileManagerView::NotifyRecentFilesChanged()
+{
+	if (!_view) {
+		return;
+	}
 
+	const QJsonObject payload{
+		{ QStringLiteral("ts"), QString::number(QDateTime::currentMSecsSinceEpoch()) },
+	};
+	const QString json = QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact));
+
+	QCefEvent event(s_eventDesktopLocalRecentFilesChanged);
+	event.setArguments(QVariantList{ json });
+	_view->triggerEvent(event, QCefView::MainFrameID);
+}
+
+QJ_NAMESPACE_FIT_CLOUD_SERVER_END

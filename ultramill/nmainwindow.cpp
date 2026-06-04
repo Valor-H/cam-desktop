@@ -2,6 +2,7 @@
 #include "cloud_controller.h"
 #include "home_workspace.h"
 #include "tool_lib_dialog.h"
+#include <project_management/cam_options.h>
 
 #include <SARibbonBar/SARibbonBar.h>
 #include <SARibbonBar/SARibbonCategory.h>
@@ -10,6 +11,7 @@
 
 #include <QAction>
 #include <QCoreApplication>
+#include <QDir>
 #include <QEvent>
 #include <QFile>
 #include <QFileDialog>
@@ -20,6 +22,8 @@
 #include <QStatusBar>
 #include <QStyle>
 #include <QTextCodec>
+#include <QTextStream>
+#include <QStringList>
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
@@ -30,6 +34,7 @@ NMainWindow::NMainWindow(QWidget* parent)
 	, _actionOpen(nullptr)
 	, _actionSave(nullptr)
 	, _currentFilePath()
+	, _nextFileContext()
 	, _homeWorkspace(nullptr)
 	, _toolLibDialog(nullptr)
 	, _cloudController(nullptr)
@@ -90,6 +95,8 @@ void NMainWindow::InitCloudController()
 bool NMainWindow::OpenFile(const QString& file_name, const QString& backup_file, bool silent)
 {
 	Q_UNUSED(backup_file);
+	WorkspaceFileContext open_context = _nextFileContext;
+	_nextFileContext = WorkspaceFileContext{};
 
 	QString target_file = file_name.trimmed();
 	if (target_file.isEmpty()) {
@@ -102,6 +109,7 @@ bool NMainWindow::OpenFile(const QString& file_name, const QString& backup_file,
 			return false;
 		}
 	}
+	open_context.filePath = QFileInfo(target_file).absoluteFilePath();
 
 	const QFileInfo file_info(target_file);
 	if (!file_info.exists() || !file_info.isFile()) {
@@ -118,15 +126,84 @@ bool NMainWindow::OpenFile(const QString& file_name, const QString& backup_file,
 		return false;
 	}
 
-	return LoadTextFileIntoWorkspace(target_file, silent);
+	const bool opened = LoadTextFileIntoWorkspace(target_file, silent);
+	if (!opened) {
+		return false;
+	}
+
+	const bool recent_list_updated = open_context.ShouldAddToLocalRecent()
+		&& AddRecentlyOpenedFile(open_context.filePath);
+	if (recent_list_updated && _cloudController) {
+		_cloudController->NotifyRecentFilesChanged();
+	}
+	return true;
 }
 
 bool NMainWindow::SaveFile(bool silent)
 {
-	if (!silent && statusBar()) {
-		statusBar()->showMessage(tr("Save command requested."), 2000);
+	if (!_homeWorkspace) {
+		return false;
 	}
 
+	const QString normalized_path = QFileInfo(_currentFilePath).absoluteFilePath().trimmed();
+	if (normalized_path.isEmpty()) {
+		if (!silent) {
+			QMessageBox::warning(this, tr("Warning"), tr("There is no file to save."));
+		}
+		return false;
+	}
+
+	QFile file(normalized_path);
+	if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
+		if (!silent) {
+			QMessageBox::warning(this, tr("Warning"), tr("Failed to save file: %1").arg(normalized_path));
+		}
+		return false;
+	}
+
+	QTextStream stream(&file);
+	stream.setCodec("UTF-8");
+	stream << _homeWorkspace->ViewportText();
+	stream.flush();
+	file.close();
+
+	if (stream.status() != QTextStream::Ok) {
+		if (!silent) {
+			QMessageBox::warning(this, tr("Warning"), tr("Failed to write file: %1").arg(normalized_path));
+		}
+		return false;
+	}
+
+	if (!silent && statusBar()) {
+		statusBar()->showMessage(tr("Saved file: %1").arg(QFileInfo(normalized_path).fileName()), 3000);
+	}
+	return true;
+}
+
+bool NMainWindow::AddRecentlyOpenedFile(const QString& file_path)
+{
+	if (!qianjizn::project::CAMOptsPtr) {
+		return false;
+	}
+
+	const QString normalized_path = QDir::toNativeSeparators(QFileInfo(file_path).absoluteFilePath()).trimmed();
+	if (normalized_path.isEmpty()) {
+		return false;
+	}
+
+	QStringList files = QString::fromStdString(qianjizn::project::CAMOptsPtr->GetRecentFileList())
+		.split(';', QString::SkipEmptyParts);
+	for (QString& file : files) {
+		file = QDir::toNativeSeparators(QFileInfo(file.trimmed()).absoluteFilePath()).trimmed();
+	}
+	files.removeAll(QString());
+	files.removeAll(normalized_path);
+	files.prepend(normalized_path);
+	while (files.size() > 9) {
+		files.removeLast();
+	}
+
+	qianjizn::project::CAMOptsPtr->SetRecentFileList(files.join(';').toStdString());
 	return true;
 }
 
@@ -172,6 +249,11 @@ bool NMainWindow::LoadTextFileIntoWorkspace(const QString& file_path, bool silen
 	}
 
 	return true;
+}
+
+void NMainWindow::SetNextFileContext(const WorkspaceFileContext& context)
+{
+	_nextFileContext = context;
 }
 
 bool NMainWindow::event(QEvent* event)

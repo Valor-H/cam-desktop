@@ -27,62 +27,63 @@ class NMainWindow;
 
 class CloudController final : public QObject
 {
-    Q_OBJECT
+	Q_OBJECT
 
 public:
-     explicit CloudController(NMainWindow* main_window);
-    ~CloudController() override;
+	explicit CloudController(NMainWindow* main_window);
+	~CloudController() override;
 
-    qianjizn::cloudserver::UserAuthService& UserAuth() { return _userAuth; }
-    const qianjizn::cloudserver::UserAuthService& UserAuth() const { return _userAuth; }
+	qianjizn::cloudserver::UserAuthService& UserAuth() { return _userAuth; }
+	const qianjizn::cloudserver::UserAuthService& UserAuth() const { return _userAuth; }
 
-    void Initialize();
-    void HandleMainWindowEvent(QEvent* event);
-    void ToggleDocumentOverlay();
-    void PrepareForLocalOpen();
-    void SaveCloudFileIfNeeded();
-    void HideFileManagerView();
+	void Initialize();
+	void HandleMainWindowEvent(QEvent* event);
+	void ToggleDocumentOverlay();
+	void PrepareForLocalOpen();
+	void SaveCloudFileIfNeeded();
+	void HideFileManagerView();
+	void NotifyRecentFilesChanged();
 
 signals:
-    void OpenRequested();
-    void NewProjectRequested();
-    void DocumentOverlayVisibleChanged(bool visible);
-    void HelpDocRequested();
-    void LicenseRequested();
-    void AboutRequested();
+	void OpenRequested();
+	void NewProjectRequested();
+	void DocumentOverlayVisibleChanged(bool visible);
+	void HelpDocRequested();
+	void LicenseRequested();
+	void AboutRequested();
 
 private:
-    enum class SyncStatusVisual {
-        NotUploaded,
-        Synced,
-    };
+	enum class SyncStatusVisual {
+		NotUploaded,
+		Synced,
+	};
 
-    bool EnsureDesktopWebServerReady(bool show_warning = true);
-    void InitUserChip();
-    void InitSyncStatusButton(QWidget* parent);
-    void RefreshUserChipFromSession();
-    void SyncTitleBarWidgets();
-    void SetSyncStatusVisual(SyncStatusVisual visual);
-    void UpdateFileManagerOverlayGeometry();
-    void OpenFileManager();
-    void ShowFileManagerWorkspace(const QUrl& page_url);
-    void ShowAccountAuthDialog();
-    void ShowAccountMenu();
-    void Logout();
-    void OpenPersonalProfile();
-    void OpenTeam();
+	bool EnsureDesktopWebServerReady(bool show_warning = true);
+	void InitUserChip();
+	void InitSyncStatusButton(QWidget* parent);
+	void RefreshUserChipFromSession();
+	void SyncTitleBarWidgets();
+	void SetSyncStatusVisual(SyncStatusVisual visual);
+	void UpdateFileManagerOverlayGeometry();
+	void OpenFileManager();
+	void ShowFileManagerWorkspace(const QUrl& page_url);
+	void ShowAccountAuthDialog();
+	void ShowAccountMenu();
+	void Logout();
+	void OpenPersonalProfile();
+	void OpenTeam();
 
-    NMainWindow* _mainWindow;
-    qianjizn::cloudserver::UserAuthService _userAuth;
-    qianjizn::cloudserver::CloudFileService* _cloudFileService;
-    qianjizn::cloudserver::DesktopWebServer* _desktopWebServer;
-    qianjizn::cloudserver::FileManagerView* _fileManagerView;
-    QToolButton* _syncStatusButton;
-    qianjizn::cloudserver::TitleBarUserChip* _userChip;
-    QMenu* _loginMenu;
-    QAction* _personalCenterAction;
-    QAction* _teamAction;
-    QAction* _logoutAction;
+	NMainWindow* _mainWindow;
+	qianjizn::cloudserver::UserAuthService _userAuth;
+	qianjizn::cloudserver::CloudFileService* _cloudFileService;
+	qianjizn::cloudserver::DesktopWebServer* _desktopWebServer;
+	qianjizn::cloudserver::FileManagerView* _fileManagerView;
+	QToolButton* _syncStatusButton;
+	qianjizn::cloudserver::TitleBarUserChip* _userChip;
+	QMenu* _loginMenu;
+	QAction* _personalCenterAction;
+	QAction* _teamAction;
+	QAction* _logoutAction;
 };
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END

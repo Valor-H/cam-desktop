@@ -91,7 +91,6 @@ HomeWorkspace::HomeWorkspace(QWidget* parent)
 	_viewportEditor->setObjectName(QStringLiteral("mockViewportEditor"));
 	_viewportEditor->setPlaceholderText(tr("Open a UTF-8 txt file to preview its content here."));
 	_viewportEditor->setLineWrapMode(QPlainTextEdit::NoWrap);
-	_viewportEditor->setReadOnly(true);
 	_viewportEditor->setStyleSheet(QStringLiteral(
 		"#mockViewportEditor {"
 		"background: #ffffff;"
@@ -116,6 +115,14 @@ void HomeWorkspace::SetViewportText(const QString& text)
 		return;
 	}
 	_viewportEditor->setPlainText(text);
+}
+
+QString HomeWorkspace::ViewportText() const
+{
+	if (!_viewportEditor) {
+		return QString();
+	}
+	return _viewportEditor->toPlainText();
 }
 
 void HomeWorkspace::SetViewportFilePath(const QString& file_path)
