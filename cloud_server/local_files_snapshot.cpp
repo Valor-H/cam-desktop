@@ -33,11 +33,11 @@ namespace LocalFilesSnapshot
 
 		QStringList RecentFilePaths()
 		{
-			if (!g_camOptsPtr) {
+			if (!CAMOptsPtr) {
 				return {};
 			}
 
-			const QString raw = QString::fromStdString(g_camOptsPtr->GetRecentFileList()).trimmed();
+			const QString raw = QString::fromStdString(CAMOptsPtr->GetRecentFileList()).trimmed();
 			if (raw.isEmpty()) {
 				return {};
 			}

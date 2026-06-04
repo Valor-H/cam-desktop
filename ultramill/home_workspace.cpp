@@ -2,6 +2,7 @@
 
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QVBoxLayout>
 
@@ -9,6 +10,7 @@ QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
 HomeWorkspace::HomeWorkspace(QWidget* parent)
 	: QWidget(parent)
+	, _viewportEditor(nullptr)
 {
 	setObjectName(QStringLiteral("mockMainWorkspace"));
 
@@ -79,13 +81,67 @@ HomeWorkspace::HomeWorkspace(QWidget* parent)
 	right_viewport->setObjectName(QStringLiteral("mockViewport"));
 	right_viewport->setStyleSheet(QStringLiteral(
 		"#mockViewport {"
-		"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #c6d0da, stop:1 #eef2f6);"
+		"background: #eef2f6;"
 		"}"));
+	QVBoxLayout* right_layout = new QVBoxLayout(right_viewport);
+	right_layout->setContentsMargins(18, 18, 18, 18);
+	right_layout->setSpacing(0);
+
+	_viewportEditor = new QPlainTextEdit(right_viewport);
+	_viewportEditor->setObjectName(QStringLiteral("mockViewportEditor"));
+	_viewportEditor->setPlaceholderText(tr("Open a UTF-8 txt file to preview its content here."));
+	_viewportEditor->setLineWrapMode(QPlainTextEdit::NoWrap);
+	_viewportEditor->setReadOnly(true);
+	_viewportEditor->setStyleSheet(QStringLiteral(
+		"#mockViewportEditor {"
+		"background: #ffffff;"
+		"color: #1f2937;"
+		"border: 1px solid #d7dce3;"
+		"border-radius: 8px;"
+		"padding: 12px;"
+		"font-family: Consolas, 'Microsoft YaHei UI';"
+		"font-size: 13px;"
+		"}"));
+	right_layout->addWidget(_viewportEditor, 1);
 
 	root_layout->addWidget(left_sidebar);
 	root_layout->addWidget(right_viewport, 1);
 }
 
 HomeWorkspace::~HomeWorkspace() = default;
+
+void HomeWorkspace::SetViewportText(const QString& text)
+{
+	if (!_viewportEditor) {
+		return;
+	}
+	_viewportEditor->setPlainText(text);
+}
+
+void HomeWorkspace::SetViewportFilePath(const QString& file_path)
+{
+	if (!_viewportEditor) {
+		return;
+	}
+
+	const QString normalized_path = file_path.trimmed();
+	_viewportEditor->setToolTip(normalized_path);
+	if (normalized_path.isEmpty()) {
+		_viewportEditor->setPlaceholderText(tr("Open a UTF-8 txt file to preview its content here."));
+		return;
+	}
+
+	_viewportEditor->setPlaceholderText(tr("Current file: %1").arg(normalized_path));
+}
+
+void HomeWorkspace::ClearViewport()
+{
+	if (!_viewportEditor) {
+		return;
+	}
+	_viewportEditor->clear();
+	_viewportEditor->setToolTip(QString());
+	_viewportEditor->setPlaceholderText(tr("Open a UTF-8 txt file to preview its content here."));
+}
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END

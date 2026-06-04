@@ -11,6 +11,6 @@ public:
 	std::string GetRecentFileList() const;
 };
 
-extern CamOptions* g_camOptsPtr;
+extern CamOptions* CAMOptsPtr;
 
 QJ_NAMESPACE_CAM_PROJECT_MANAGEMENT_END

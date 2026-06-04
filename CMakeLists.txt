@@ -25,7 +25,8 @@ endif()
 find_package(Qt5 COMPONENTS Core Gui Widgets Network Concurrent LinguistTools REQUIRED)
 
 # 2. QCefView
-set(QCEF_ROOT "D:/Codes/3rdparty/QCefView")
+set(THIRD_PARTY_ROOT "${CMAKE_SOURCE_DIR}/3rdparty")
+set(QCEF_ROOT "${THIRD_PARTY_ROOT}/QCefView")
 
 add_library(QCefView SHARED IMPORTED GLOBAL)
 set_target_properties(QCefView PROPERTIES
@@ -38,18 +39,18 @@ set_target_properties(QCefView PROPERTIES
 )
 
 # 3. SARibbonBar
-set(SARibbonBar_DIR "D:/Codes/3rdparty/SARibbon/bin_qt5.15.2_MSVC_x64/lib/cmake/SARibbonBar")
+set(SARibbonBar_DIR "${THIRD_PARTY_ROOT}/SARibbon/lib/cmake/SARibbonBar")
 find_package(SARibbonBar REQUIRED)
 set_property(TARGET SARibbonBar::SARibbonBar APPEND PROPERTY
-    INTERFACE_INCLUDE_DIRECTORIES "D:/Codes/3rdparty/SARibbon/bin_qt5.15.2_MSVC_x64/include"
+    INTERFACE_INCLUDE_DIRECTORIES "${THIRD_PARTY_ROOT}/SARibbon/include"
 )
-set(SARIBBON_RUNTIME_DIR "D:/Codes/3rdparty/SARibbon/bin_qt5.15.2_MSVC_x64/bin")
+set(SARIBBON_RUNTIME_DIR "${THIRD_PARTY_ROOT}/SARibbon/bin")
 set(SARIBBON_DLL_DEBUG "${SARIBBON_RUNTIME_DIR}/SARibbonBard.dll")
 set(SARIBBON_DLL_RELEASE "${SARIBBON_RUNTIME_DIR}/SARibbonBar.dll")
 
 # 4. libhv
-set(LIBHV_DEBUG_ROOT "D:/Codes/3rdparty/libhv_ssl_debug" CACHE PATH "libhv debug build root" FORCE)
-set(LIBHV_RELEASE_ROOT "D:/Codes/3rdparty/libhv_ssl_release" CACHE PATH "libhv release build root" FORCE)
+set(LIBHV_DEBUG_ROOT "${THIRD_PARTY_ROOT}/libhv/Debug" CACHE PATH "libhv debug build root" FORCE)
+set(LIBHV_RELEASE_ROOT "${THIRD_PARTY_ROOT}/libhv/Release" CACHE PATH "libhv release build root" FORCE)
 add_library(libhv SHARED IMPORTED GLOBAL)
 set_target_properties(libhv PROPERTIES
     IMPORTED_CONFIGURATIONS "Debug;Release"

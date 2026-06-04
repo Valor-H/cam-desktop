@@ -36,6 +36,7 @@ protected:
     bool event(QEvent* event) override;
 
 private:
+    bool LoadTextFileIntoWorkspace(const QString& file_path, bool silent);
     void InitializeMainWindowShell();
     void ApplyWindowPresentation();
     void InitCloudController();
@@ -50,6 +51,7 @@ private:
     QAction* _actionNew;
     QAction* _actionOpen;
     QAction* _actionSave;
+    QString _currentFilePath;
     HomeWorkspace* _homeWorkspace;
     ToolLibDialog* _toolLibDialog;
     CloudController* _cloudController;

@@ -6,6 +6,7 @@
 #include <cloud_server/desktop_web_server.h>
 #include <cloud_server/file_manager_view.h>
 #include <cloud_server/title_bar_user_chip.h>
+#include <SARibbonBar/SARibbonBar.h>
 #include <SARibbonBar/SARibbonSystemButtonBar.h>
 
 #include <QAbstractButton>
@@ -15,6 +16,7 @@
 #include <QMessageBox>
 #include <QStatusBar>
 #include <QTimer>
+#include <QToolButton>
 #include <QWidget>
 
 #include <QCefContext.h>
@@ -30,6 +32,7 @@ CloudController::CloudController(NMainWindow* main_window)
 	, _cloudFileService(nullptr)
 	, _desktopWebServer(nullptr)
 	, _fileManagerView(nullptr)
+	, _syncStatusButton(nullptr)
 	, _userChip(nullptr)
 	, _loginMenu(nullptr)
 	, _personalCenterAction(nullptr)
@@ -52,6 +55,7 @@ void CloudController::Initialize()
 	RefreshUserChipFromSession();
 	_userAuth.InitFromStoredToken();
 	HideFileManagerView();
+	SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
 }
 
 void CloudController::HandleMainWindowEvent(QEvent* event)
@@ -87,6 +91,7 @@ void CloudController::PrepareForLocalOpen()
 	if (_cloudFileService) {
 		_cloudFileService->ClearCurrentFile();
 	}
+	SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
 }
 
 void CloudController::SaveCloudFileIfNeeded()
@@ -95,6 +100,7 @@ void CloudController::SaveCloudFileIfNeeded()
 		if (_mainWindow && _mainWindow->statusBar()) {
 			_mainWindow->statusBar()->showMessage(tr("Local file save completed."), 3000);
 		}
+		SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
 		return;
 	}
 
@@ -129,6 +135,7 @@ void CloudController::SaveCloudFileIfNeeded()
 			if (_mainWindow->statusBar()) {
 				_mainWindow->statusBar()->showMessage(tr("Cloud file saved."), 3000);
 			}
+			SetSyncStatusVisual(SyncStatusVisual::Synced);
 		},
 		&error_message);
 
@@ -186,10 +193,11 @@ void CloudController::InitUserChip()
 	spacer_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	bar->addWidget(spacer_widget);
 
+	InitSyncStatusButton(bar);
 	_userChip = new qianjizn::cloudserver::TitleBarUserChip(bar, _userAuth.ApiBaseUrl());
 	bar->addWidget(_userChip);
 
-	QTimer::singleShot(0, this, [this]() { SyncUserChipIntoTitleBar(); });
+	QTimer::singleShot(0, this, [this]() { SyncTitleBarWidgets(); });
 
 	_loginMenu = new QMenu(_mainWindow);
 	_personalCenterAction = _loginMenu->addAction(tr("Personal center"));
@@ -207,6 +215,40 @@ void CloudController::InitUserChip()
 		_userChip, &qianjizn::cloudserver::TitleBarUserChip::accountMenuRequested, this, &CloudController::ShowAccountMenu);
 }
 
+void CloudController::InitSyncStatusButton(QWidget* parent)
+{
+	if (_syncStatusButton) {
+		return;
+	}
+
+	_syncStatusButton = new QToolButton(parent);
+	_syncStatusButton->setObjectName(QStringLiteral("CamSyncStatusButton"));
+	_syncStatusButton->setAutoRaise(true);
+	_syncStatusButton->setFocusPolicy(Qt::NoFocus);
+	_syncStatusButton->setCursor(Qt::PointingHandCursor);
+	_syncStatusButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+	_syncStatusButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+	_syncStatusButton->setStyleSheet(QStringLiteral(
+		"QToolButton#CamSyncStatusButton {"
+		"padding: 0 4px;"
+		"min-width: 0px;"
+		"background: transparent;"
+		"border: none;"
+		"border-radius: 4px;"
+		"}"
+		"QToolButton#CamSyncStatusButton:hover {"
+		"background: #dbeafe;"
+		"color: #1558b0;"
+		"}"));
+	SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
+	if (_mainWindow) {
+		if (SARibbonBar* ribbon_bar = _mainWindow->ribbonBar()) {
+			ribbon_bar->setCornerWidget(_syncStatusButton, Qt::TopRightCorner);
+			ribbon_bar->setCornerWidgetVisible(true, Qt::TopRightCorner);
+		}
+	}
+}
+
 void CloudController::RefreshUserChipFromSession()
 {
 	if (!_userChip) {
@@ -214,13 +256,13 @@ void CloudController::RefreshUserChipFromSession()
 	}
 
 	_userChip->SyncFromSession(_userAuth.Session());
-	SyncUserChipIntoTitleBar();
-	QTimer::singleShot(0, this, [this]() { SyncUserChipIntoTitleBar(); });
+	SyncTitleBarWidgets();
+	QTimer::singleShot(0, this, [this]() { SyncTitleBarWidgets(); });
 }
 
-void CloudController::SyncUserChipIntoTitleBar()
+void CloudController::SyncTitleBarWidgets()
 {
-	if (!_userChip || !_mainWindow) {
+	if (!_mainWindow) {
 		return;
 	}
 
@@ -239,8 +281,37 @@ void CloudController::SyncUserChipIntoTitleBar()
 
 	const int min_height = qianjizn::cloudserver::TitleBarUserChip::s_avatarButtonSide;
 	const int height = row_h > 0 ? qMax(row_h, min_height) : min_height;
-	_userChip->setFixedHeight(height);
-	_userChip->RelayoutInParent();
+	if (_syncStatusButton) {
+		const int sync_height = _mainWindow->ribbonBar() ? qMax(24, _mainWindow->ribbonBar()->tabBarHeight() - 4) : height;
+		_syncStatusButton->setFixedHeight(sync_height);
+		_syncStatusButton->adjustSize();
+	}
+	if (_userChip) {
+		_userChip->setFixedHeight(height);
+		_userChip->RelayoutInParent();
+	}
+}
+
+void CloudController::SetSyncStatusVisual(SyncStatusVisual visual)
+{
+	if (!_syncStatusButton) {
+		return;
+	}
+
+	QString text;
+	QString tool_tip;
+	if (visual == SyncStatusVisual::Synced) {
+		text = QStringLiteral("已同步");
+		tool_tip = QStringLiteral("当前文件内容已同步到云端");
+	}
+	else {
+		text = QStringLiteral("未上传");
+		tool_tip = QStringLiteral("当前文件仅保存在本地，尚未上传到云端");
+	}
+
+	_syncStatusButton->setText(text);
+	_syncStatusButton->setToolTip(tool_tip);
+	_syncStatusButton->adjustSize();
 }
 
 void CloudController::UpdateFileManagerOverlayGeometry()
@@ -303,6 +374,7 @@ void CloudController::ShowFileManagerWorkspace(const QUrl& page_url)
 			if (_cloudFileService) {
 				_cloudFileService->TrackOpenedLocalFile(file_path);
 			}
+			SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
 			});
 		connect(_fileManagerView,
 			&qianjizn::cloudserver::FileManagerView::OpenCloudFileRequested,
@@ -321,6 +393,7 @@ void CloudController::ShowFileManagerWorkspace(const QUrl& page_url)
 				if (_cloudFileService) {
 					_cloudFileService->TrackOpenedCloudFile(file_path, file_uuid);
 				}
+				SetSyncStatusVisual(SyncStatusVisual::Synced);
 			});
 		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::OpenRequested, this, &CloudController::OpenRequested);
 		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::NewProjectRequested, this, &CloudController::NewProjectRequested);

@@ -11,6 +11,7 @@ class QEvent;
 class QMenu;
 class QUrl;
 class QWidget;
+class QToolButton;
 
 QJ_NAMESPACE_BEGIN1(cloudserver)
 class CloudFileService;
@@ -48,10 +49,17 @@ signals:
     void DocumentOverlayVisibleChanged(bool visible);
 
 private:
+    enum class SyncStatusVisual {
+        NotUploaded,
+        Synced,
+    };
+
     bool EnsureDesktopWebServerReady(bool show_warning = true);
     void InitUserChip();
+    void InitSyncStatusButton(QWidget* parent);
     void RefreshUserChipFromSession();
-    void SyncUserChipIntoTitleBar();
+    void SyncTitleBarWidgets();
+    void SetSyncStatusVisual(SyncStatusVisual visual);
     void UpdateFileManagerOverlayGeometry();
     void OpenFileManager();
     void ShowFileManagerWorkspace(const QUrl& page_url);
@@ -66,6 +74,7 @@ private:
     qianjizn::cloudserver::CloudFileService* _cloudFileService;
     qianjizn::cloudserver::DesktopWebServer* _desktopWebServer;
     qianjizn::cloudserver::FileManagerView* _fileManagerView;
+    QToolButton* _syncStatusButton;
     qianjizn::cloudserver::TitleBarUserChip* _userChip;
     QMenu* _loginMenu;
     QAction* _personalCenterAction;

@@ -11,11 +11,15 @@
 #include <QAction>
 #include <QCoreApplication>
 #include <QEvent>
+#include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QIcon>
 #include <QMessageBox>
 #include <QProcess>
 #include <QStatusBar>
 #include <QStyle>
+#include <QTextCodec>
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
@@ -25,6 +29,7 @@ NMainWindow::NMainWindow(QWidget* parent)
 	, _actionNew(nullptr)
 	, _actionOpen(nullptr)
 	, _actionSave(nullptr)
+	, _currentFilePath()
 	, _homeWorkspace(nullptr)
 	, _toolLibDialog(nullptr)
 	, _cloudController(nullptr)
@@ -81,16 +86,86 @@ void NMainWindow::InitCloudController()
 
 bool NMainWindow::OpenFile(const QString& file_name, const QString& backup_file, bool silent)
 {
-	Q_UNUSED(file_name);
 	Q_UNUSED(backup_file);
-	Q_UNUSED(silent);
-	return true;
+
+	QString target_file = file_name.trimmed();
+	if (target_file.isEmpty()) {
+		target_file = QFileDialog::getOpenFileName(
+			this,
+			tr("Open QJP File"),
+			_currentFilePath,
+			tr("QJP Files (*.qjp)"));
+		if (target_file.isEmpty()) {
+			return false;
+		}
+	}
+
+	const QFileInfo file_info(target_file);
+	if (!file_info.exists() || !file_info.isFile()) {
+		if (!silent) {
+			QMessageBox::warning(this, tr("Warning"), tr("The selected QJP file does not exist."));
+		}
+		return false;
+	}
+
+	if (file_info.suffix().compare(QStringLiteral("qjp"), Qt::CaseInsensitive) != 0) {
+		if (!silent) {
+			QMessageBox::warning(this, tr("Warning"), tr("Only .qjp files can be opened."));
+		}
+		return false;
+	}
+
+	return LoadTextFileIntoWorkspace(target_file, silent);
 }
 
 bool NMainWindow::SaveFile(bool silent)
 {
 	if (!silent && statusBar()) {
 		statusBar()->showMessage(tr("Save command requested."), 2000);
+	}
+
+	return true;
+}
+
+bool NMainWindow::LoadTextFileIntoWorkspace(const QString& file_path, bool silent)
+{
+	if (!_homeWorkspace) {
+		return false;
+	}
+
+	const QString normalized_path = QFileInfo(file_path).absoluteFilePath();
+	QFile file(normalized_path);
+	if (!file.open(QIODevice::ReadOnly)) {
+		if (!silent) {
+			QMessageBox::warning(this, tr("Warning"), tr("Failed to open file: %1").arg(normalized_path));
+		}
+		return false;
+	}
+
+	const QByteArray raw = file.readAll();
+	QTextCodec* utf8_codec = QTextCodec::codecForName("UTF-8");
+	if (!utf8_codec) {
+		if (!silent) {
+			QMessageBox::warning(this, tr("Warning"), tr("UTF-8 codec is unavailable."));
+		}
+		return false;
+	}
+
+	QTextCodec::ConverterState state;
+	const QString text = utf8_codec->toUnicode(raw.constData(), raw.size(), &state);
+	if (state.invalidChars > 0) {
+		if (!silent) {
+			QMessageBox::warning(this, tr("Warning"), tr("Only UTF-8 encoded files are supported."));
+		}
+		return false;
+	}
+
+	_homeWorkspace->SetViewportText(text);
+	_homeWorkspace->SetViewportFilePath(normalized_path);
+	_currentFilePath = normalized_path;
+
+	if (!silent && statusBar()) {
+		statusBar()->showMessage(tr("Opened file: %1").arg(QFileInfo(normalized_path).fileName()), 3000);
 	}
 
 	return true;
@@ -210,10 +285,6 @@ void NMainWindow::OnOpen()
 
 	if (!OpenFile(QString(), QString(), false)) {
 		return;
-	}
-
-	if (statusBar()) {
-		statusBar()->showMessage(tr("Open command requested."), 2000);
 	}
 }
 

@@ -11,6 +11,7 @@ cmake_install.cmake
 install_manifest.txt
 CTestTestfile.cmake
 _deps/
+3rdparty/
 
 # MSVC / VS 生成（本工程以 CMake 为准，根目录下的工程文件多为 CMake 生成）
 *.slnx
