@@ -60,7 +60,8 @@ private:
 
 	bool EnsureDesktopWebServerReady(bool show_warning = true);
 	void InitUserChip();
-	void InitSyncStatusButton(QWidget* parent);
+	void InitSyncStatusButton();
+	void InitShareButton();
 	void RefreshUserChipFromSession();
 	void SyncTitleBarWidgets();
 	void SetSyncStatusVisual(SyncStatusVisual visual);
@@ -79,6 +80,7 @@ private:
 	qianjizn::cloudserver::DesktopWebServer* _desktopWebServer;
 	qianjizn::cloudserver::FileManagerView* _fileManagerView;
 	QToolButton* _syncStatusButton;
+	QToolButton* _shareButton;
 	qianjizn::cloudserver::TitleBarUserChip* _userChip;
 	QMenu* _loginMenu;
 	QAction* _personalCenterAction;

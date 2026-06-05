@@ -296,6 +296,9 @@ void NMainWindow::InitRibbonBar()
 	ribbon_bar_widget->setRibbonStyle(SARibbonBar::RibbonStyleLooseThreeRow);
 	ribbon_bar_widget->setApplicationButton(nullptr);
 
+	// ribbon最小化按钮
+	ribbon_bar_widget->showMinimumModeButton(true);
+
 	if (SARibbonQuickAccessBar* quick_access_bar = ribbon_bar_widget->quickAccessBar()) {
 		quick_access_bar->addAction(_actionDocument);
 		quick_access_bar->addAction(_actionNew);

@@ -8,6 +8,7 @@
 #include <cloud_server/file_manager_view.h>
 #include <cloud_server/title_bar_user_chip.h>
 #include <SARibbonBar/SARibbonBar.h>
+#include <SARibbonBar/SARibbonButtonGroupWidget.h>
 #include <SARibbonBar/SARibbonSystemButtonBar.h>
 
 #include <QAbstractButton>
@@ -34,6 +35,7 @@ CloudController::CloudController(NMainWindow* main_window)
 	, _desktopWebServer(nullptr)
 	, _fileManagerView(nullptr)
 	, _syncStatusButton(nullptr)
+	, _shareButton(nullptr)
 	, _userChip(nullptr)
 	, _loginMenu(nullptr)
 	, _personalCenterAction(nullptr)
@@ -206,7 +208,8 @@ void CloudController::InitUserChip()
 	spacer_widget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	bar->addWidget(spacer_widget);
 
-	InitSyncStatusButton(bar);
+	InitSyncStatusButton();
+	InitShareButton();
 	_userChip = new qianjizn::cloudserver::TitleBarUserChip(bar, _userAuth.ApiBaseUrl());
 	bar->addWidget(_userChip);
 
@@ -228,13 +231,27 @@ void CloudController::InitUserChip()
 		_userChip, &qianjizn::cloudserver::TitleBarUserChip::accountMenuRequested, this, &CloudController::ShowAccountMenu);
 }
 
-void CloudController::InitSyncStatusButton(QWidget* parent)
+void CloudController::InitSyncStatusButton()
 {
 	if (_syncStatusButton) {
 		return;
 	}
 
-	_syncStatusButton = new QToolButton(parent);
+	if (!_mainWindow) {
+		return;
+	}
+
+	SARibbonBar* ribbon_bar = _mainWindow->ribbonBar();
+	if (!ribbon_bar) {
+		return;
+	}
+
+	SARibbonButtonGroupWidget* right_group = ribbon_bar->activeRightButtonGroup();
+	if (!right_group) {
+		return;
+	}
+
+	_syncStatusButton = new QToolButton(right_group);
 	_syncStatusButton->setObjectName(QStringLiteral("CamSyncStatusButton"));
 	_syncStatusButton->setAutoRaise(true);
 	_syncStatusButton->setFocusPolicy(Qt::NoFocus);
@@ -254,12 +271,52 @@ void CloudController::InitSyncStatusButton(QWidget* parent)
 		"color: #1558b0;"
 		"}"));
 	SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
-	if (_mainWindow) {
-		if (SARibbonBar* ribbon_bar = _mainWindow->ribbonBar()) {
-			ribbon_bar->setCornerWidget(_syncStatusButton, Qt::TopRightCorner);
-			ribbon_bar->setCornerWidgetVisible(true, Qt::TopRightCorner);
-		}
+
+	right_group->addWidget(_syncStatusButton);
+}
+
+void CloudController::InitShareButton()
+{
+	if (_shareButton) {
+		return;
 	}
+
+	if (!_mainWindow) {
+		return;
+	}
+
+	SARibbonBar* ribbon_bar = _mainWindow->ribbonBar();
+	if (!ribbon_bar) {
+		return;
+	}
+
+	SARibbonButtonGroupWidget* right_group = ribbon_bar->activeRightButtonGroup();
+	if (!right_group) {
+		return;
+	}
+
+	_shareButton = new QToolButton(right_group);
+	_shareButton->setObjectName(QStringLiteral("CamShareButton"));
+	_shareButton->setAutoRaise(true);
+	_shareButton->setFocusPolicy(Qt::NoFocus);
+	_shareButton->setCursor(Qt::PointingHandCursor);
+	_shareButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+	_shareButton->setText(QStringLiteral("分享"));
+	_shareButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+	_shareButton->setStyleSheet(QStringLiteral(
+		"QToolButton#CamShareButton {"
+		"padding: 0 4px;"
+		"min-width: 0px;"
+		"background: #549bed;"
+		"border: none;"
+		"color:#FFFFFF;"
+		"border-radius: 4px;"
+		"}"
+		"QToolButton#CamShareButton:hover {"
+		"background: #dbeafe;"
+		"color: #1558b0;"
+		"}"));
+	right_group->addWidget(_shareButton);
 }
 
 void CloudController::RefreshUserChipFromSession()
@@ -294,10 +351,14 @@ void CloudController::SyncTitleBarWidgets()
 
 	const int min_height = qianjizn::cloudserver::TitleBarUserChip::s_avatarButtonSide;
 	const int height = row_h > 0 ? qMax(row_h, min_height) : min_height;
+	const int sync_height = _mainWindow->ribbonBar() ? qMax(24, _mainWindow->ribbonBar()->tabBarHeight() - 4) : height;
 	if (_syncStatusButton) {
-		const int sync_height = _mainWindow->ribbonBar() ? qMax(24, _mainWindow->ribbonBar()->tabBarHeight() - 4) : height;
 		_syncStatusButton->setFixedHeight(sync_height);
 		_syncStatusButton->adjustSize();
+	}
+	if (_shareButton) {
+		_shareButton->setFixedHeight(sync_height);
+		_shareButton->adjustSize();
 	}
 	if (_userChip) {
 		_userChip->setFixedHeight(height);
