@@ -32,15 +32,21 @@ target_include_directories(ultramill PUBLIC
 )
 
 target_link_libraries(ultramill PUBLIC
-    cloud_server
-    QCefView
+    project_management
     SARibbonBar::SARibbonBar
     Qt5::Core
     Qt5::Gui
     Qt5::Widgets
-    Qt5::Network
-    libhv
 )
+
+if(ENABLE_CLOUD_SERVER_MODULE)
+    target_link_libraries(ultramill PUBLIC
+        cloud_server
+        QCefView
+        Qt5::Network
+        libhv
+    )
+endif()
 
 if(MSVC)
     target_compile_options(ultramill PRIVATE /utf-8)

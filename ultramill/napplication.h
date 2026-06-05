@@ -17,7 +17,9 @@ public:
 
 private:
 	void LoadTranslations();
-	static void InitCefRuntime();
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+	static void InitializeCefRuntime();
+#endif
 
 	QTranslator* _cloudServerTranslator;
 	QTranslator* _ultramillTranslator;

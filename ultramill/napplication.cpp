@@ -1,5 +1,8 @@
 #include "napplication.h"
+
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 #include <cloud_server/q_cef_runtime.h>
+#endif
 
 #include <QCoreApplication>
 #include <QDir>
@@ -31,7 +34,9 @@ void NApplication::Initialize()
 {
 	InitUltramillResources();
 	LoadTranslations();
-	InitCefRuntime();
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+	InitializeCefRuntime();
+#endif
 }
 
 void NApplication::LoadTranslations()
@@ -50,6 +55,7 @@ void NApplication::LoadTranslations()
 
 	const QString app_dir = QCoreApplication::applicationDirPath();
 
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	const QString cloud_server_qm = QDir(app_dir).filePath(QStringLiteral("cloud_server_zh_CN.qm"));
 	if (QFileInfo::exists(cloud_server_qm)) {
 		QTranslator* translator = new QTranslator(this);
@@ -61,6 +67,7 @@ void NApplication::LoadTranslations()
 			delete translator;
 		}
 	}
+#endif
 
 	const QString ultramill_qm = QDir(app_dir).filePath(QStringLiteral("ultramill_zh_CN.qm"));
 	if (QFileInfo::exists(ultramill_qm)) {
@@ -75,9 +82,11 @@ void NApplication::LoadTranslations()
 	}
 }
 
-void NApplication::InitCefRuntime()
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+void NApplication::InitializeCefRuntime()
 {
 	qianjizn::cloudserver::QCefRuntime::Instance().Initialize();
 }
+#endif
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END

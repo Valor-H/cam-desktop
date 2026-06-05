@@ -1,8 +1,9 @@
 #pragma once
 
 #include "ultramill_global.h"
-
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 #include <cloud_server/user_auth_service.h>
+#endif
 
 #include <QObject>
 
@@ -14,11 +15,13 @@ class QWidget;
 class QToolButton;
 
 QJ_NAMESPACE_BEGIN1(cloudserver)
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 class CloudFileService;
 class UserAuthService;
 class DesktopWebServer;
 class FileManagerView;
 class TitleBarUserChip;
+#endif
 QJ_NAMESPACE_END1
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
@@ -33,8 +36,10 @@ public:
 	explicit CloudController(NMainWindow* main_window);
 	~CloudController() override;
 
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	qianjizn::cloudserver::UserAuthService& UserAuth() { return _userAuth; }
 	const qianjizn::cloudserver::UserAuthService& UserAuth() const { return _userAuth; }
+#endif
 
 	void Initialize();
 	void HandleMainWindowEvent(QEvent* event);
@@ -53,6 +58,7 @@ signals:
 	void AboutRequested();
 
 private:
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	enum class SyncStatusVisual {
 		NotUploaded,
 		Synced,
@@ -86,6 +92,9 @@ private:
 	QAction* _personalCenterAction;
 	QAction* _teamAction;
 	QAction* _logoutAction;
+#else
+	NMainWindow* _mainWindow;
+#endif
 };
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END

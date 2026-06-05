@@ -1,5 +1,7 @@
 #include "nmainwindow.h"
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 #include "cloud_controller.h"
+#endif
 #include "home_workspace.h"
 #include "tool_lib_dialog.h"
 #include <project_management/cam_options.h>
@@ -29,7 +31,9 @@ QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
 NMainWindow::NMainWindow(QWidget* parent)
 	: SARibbonMainWindow(parent)
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	, _actionDocument(nullptr)
+#endif
 	, _actionNew(nullptr)
 	, _actionOpen(nullptr)
 	, _actionSave(nullptr)
@@ -37,12 +41,16 @@ NMainWindow::NMainWindow(QWidget* parent)
 	, _nextFileContext()
 	, _homeWorkspace(nullptr)
 	, _toolLibDialog(nullptr)
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	, _cloudController(nullptr)
+#endif
 {
 	ApplyWindowPresentation();
 
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	_actionDocument = new QAction(tr("Document"), this);
 	_actionDocument->setCheckable(true);
+#endif
 	_actionNew = new QAction(QIcon(), tr("New"), this);
 	_actionOpen = new QAction(QIcon(), tr("Open"), this);
 	_actionSave = new QAction(QIcon(), tr("Save"), this);
@@ -50,13 +58,16 @@ NMainWindow::NMainWindow(QWidget* parent)
 	connect(_actionSave, &QAction::triggered, this, &NMainWindow::OnSave);
 	connect(_actionNew, &QAction::triggered, this, &NMainWindow::OnNewProject);
 
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	InitCloudController();
+#endif
 
 	InitializeMainWindowShell();
 }
 
 NMainWindow::~NMainWindow() = default;
 
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 qianjizn::cloudserver::UserAuthService& NMainWindow::UserAuth()
 {
 	return _cloudController->UserAuth();
@@ -66,6 +77,7 @@ const qianjizn::cloudserver::UserAuthService& NMainWindow::UserAuth() const
 {
 	return _cloudController->UserAuth();
 }
+#endif
 
 void NMainWindow::ApplyWindowPresentation()
 {
@@ -74,6 +86,7 @@ void NMainWindow::ApplyWindowPresentation()
 	setMinimumSize(600, 400);
 }
 
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 void NMainWindow::InitCloudController()
 {
 	if (_cloudController) {
@@ -91,6 +104,7 @@ void NMainWindow::InitCloudController()
 	connect(_cloudController, &CloudController::LicenseRequested, this, &NMainWindow::OnLicense);
 	connect(_cloudController, &CloudController::AboutRequested, this, &NMainWindow::OnAbout);
 }
+#endif
 
 bool NMainWindow::OpenFile(const QString& file_name, const QString& backup_file, bool silent)
 {
@@ -133,9 +147,11 @@ bool NMainWindow::OpenFile(const QString& file_name, const QString& backup_file,
 
 	const bool recent_list_updated = open_context.ShouldAddToLocalRecent()
 		&& AddRecentlyOpenedFile(open_context.filePath);
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (recent_list_updated && _cloudController) {
 		_cloudController->NotifyRecentFilesChanged();
 	}
+#endif
 	return true;
 }
 
@@ -258,9 +274,11 @@ void NMainWindow::SetNextFileContext(const WorkspaceFileContext& context)
 
 bool NMainWindow::event(QEvent* event)
 {
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (_cloudController) {
 		_cloudController->HandleMainWindowEvent(event);
 	}
+#endif
 	return SARibbonMainWindow::event(event);
 }
 
@@ -268,9 +286,11 @@ void NMainWindow::InitializeMainWindowShell()
 {
 	InitRibbonBar();
 	InitCentralWorkspace();
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (_cloudController) {
 		_cloudController->Initialize();
 	}
+#endif
 }
 
 void NMainWindow::InitCentralWorkspace()
@@ -300,7 +320,9 @@ void NMainWindow::InitRibbonBar()
 	ribbon_bar_widget->showMinimumModeButton(true);
 
 	if (SARibbonQuickAccessBar* quick_access_bar = ribbon_bar_widget->quickAccessBar()) {
+	#ifdef ENABLE_CLOUD_SERVER_MODULE
 		quick_access_bar->addAction(_actionDocument);
+	#endif
 		quick_access_bar->addAction(_actionNew);
 		quick_access_bar->addAction(_actionOpen);
 		quick_access_bar->addAction(_actionSave);
@@ -326,6 +348,7 @@ void NMainWindow::InitRibbonBar()
 		};
 
 	SARibbonCategory* category_file = ribbon_bar_widget->addCategoryPage(QStringLiteral("File"));
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	fillPanel(category_file->addPanel(QStringLiteral("Project")),
 		{
 			_actionDocument,
@@ -333,6 +356,14 @@ void NMainWindow::InitRibbonBar()
 			_actionOpen,
 			_actionSave,
 		});
+#else
+	fillPanel(category_file->addPanel(QStringLiteral("Project")),
+		{
+			_actionNew,
+			_actionOpen,
+			_actionSave,
+		});
+#endif
 
 	SARibbonCategory* category_home = ribbon_bar_widget->addCategoryPage(QStringLiteral("Home"));
 	fillPanel(category_home->addPanel(QStringLiteral("Workspace")),
@@ -367,9 +398,11 @@ void NMainWindow::OnShowToolLibDialog()
 
 void NMainWindow::OnOpen()
 {
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (_cloudController) {
 		_cloudController->PrepareForLocalOpen();
 	}
+#endif
 
 	if (!OpenFile(QString(), QString(), false)) {
 		return;
@@ -382,16 +415,20 @@ void NMainWindow::OnSave()
 		return;
 	}
 
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (_cloudController) {
 		_cloudController->SaveCloudFileIfNeeded();
 	}
+#endif
 }
 
 void NMainWindow::OnNewProject()
 {
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (_cloudController) {
 		_cloudController->HideFileManagerView();
 	}
+#endif
 	const QString program = QCoreApplication::applicationFilePath();
 	const bool started = QProcess::startDetached(program, QStringList{}, QCoreApplication::applicationDirPath());
 	if (statusBar()) {

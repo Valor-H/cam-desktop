@@ -1,6 +1,7 @@
 #include "cloud_controller.h"
 
 #include "nmainwindow.h"
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 #include "workspace_file_context.h"
 
 #include <cloud_server/desktop_web.h>
@@ -24,10 +25,12 @@
 #include <QCefContext.h>
 
 using qianjizn::cloudserver::UserSession;
+#endif
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
 CloudController::CloudController(NMainWindow* main_window)
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	: QObject(main_window)
 	, _mainWindow(main_window)
 	, _userAuth(qianjizn::cloudserver::CloudServerConfig{})
@@ -48,21 +51,30 @@ CloudController::CloudController(NMainWindow* main_window)
 	_cloudFileService = new qianjizn::cloudserver::CloudFileService(&_userAuth, this);
 	_desktopWebServer = new qianjizn::cloudserver::DesktopWebServer(&_userAuth, this);
 }
+#else
+	: QObject(main_window)
+	, _mainWindow(main_window)
+{
+}
+#endif
 
 CloudController::~CloudController() = default;
 
 void CloudController::Initialize()
 {
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	InitUserChip();
 	EnsureDesktopWebServerReady();
 	RefreshUserChipFromSession();
 	_userAuth.InitFromStoredToken();
 	HideFileManagerView();
 	SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
+#endif
 }
 
 void CloudController::HandleMainWindowEvent(QEvent* event)
 {
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (event && event->type() == QEvent::WindowActivate) {
 		_userAuth.OnWindowActivateEvent();
 		if (_fileManagerView && _fileManagerView->isVisible()) {
@@ -75,10 +87,14 @@ void CloudController::HandleMainWindowEvent(QEvent* event)
 			|| event->type() == QEvent::LayoutRequest || event->type() == QEvent::Show)) {
 		UpdateFileManagerOverlayGeometry();
 	}
+#else
+	Q_UNUSED(event);
+#endif
 }
 
 void CloudController::ToggleDocumentOverlay()
 {
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (_fileManagerView && _fileManagerView->isVisible()) {
 		HideFileManagerView();
 		return;
@@ -86,10 +102,14 @@ void CloudController::ToggleDocumentOverlay()
 
 	OpenFileManager();
 	emit DocumentOverlayVisibleChanged(_fileManagerView && _fileManagerView->isVisible());
+#else
+	emit DocumentOverlayVisibleChanged(false);
+#endif
 }
 
 void CloudController::PrepareForLocalOpen()
 {
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	HideFileManagerView();
 	if (_cloudFileService) {
 		_cloudFileService->ClearCurrentFile();
@@ -100,10 +120,12 @@ void CloudController::PrepareForLocalOpen()
 		_mainWindow->SetNextFileContext(context);
 	}
 	SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
+#endif
 }
 
 void CloudController::SaveCloudFileIfNeeded()
 {
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (!_cloudFileService || !_cloudFileService->IsCurrentFileCloud()) {
 		if (_mainWindow && _mainWindow->statusBar()) {
 			_mainWindow->statusBar()->showMessage(tr("Local file save completed."), 3000);
@@ -155,24 +177,31 @@ void CloudController::SaveCloudFileIfNeeded()
 	if (_mainWindow && _mainWindow->statusBar()) {
 		_mainWindow->statusBar()->showMessage(tr("Saving cloud file..."), 2000);
 	}
+#endif
 }
 
 void CloudController::HideFileManagerView()
 {
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (_fileManagerView) {
 		_fileManagerView->hide();
 	}
-
 	emit DocumentOverlayVisibleChanged(false);
+#else
+	emit DocumentOverlayVisibleChanged(false);
+#endif
 }
 
 void CloudController::NotifyRecentFilesChanged()
 {
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (_fileManagerView) {
 		_fileManagerView->NotifyRecentFilesChanged();
 	}
+#endif
 }
 
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 bool CloudController::EnsureDesktopWebServerReady(bool show_warning)
 {
 	if (!_desktopWebServer) {
@@ -567,5 +596,6 @@ void CloudController::OpenTeam()
 		QDesktopServices::openUrl(url);
 		});
 }
+#endif
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END
