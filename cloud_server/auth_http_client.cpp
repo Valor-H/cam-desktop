@@ -72,10 +72,13 @@ void AuthHttpClient::Post(
 						const QJsonObject root = document.object();
 						result.bizCode = root.value(QStringLiteral("code")).toInt(-1);
 						result.bizMsg = root.value(QStringLiteral("msg")).toString();
-						const QJsonObject data_obj =
-							root.value(QStringLiteral("data")).toObject();
-						if (!data_obj.isEmpty()) {
-							result.data = data_obj.toVariantMap();
+						const QJsonValue data_value = root.value(QStringLiteral("data"));
+						result.dataValue = data_value.toVariant();
+						if (data_value.isObject()) {
+							const QJsonObject data_obj = data_value.toObject();
+							if (!data_obj.isEmpty()) {
+								result.data = data_obj.toVariantMap();
+							}
 						}
 					}
 
@@ -247,9 +250,13 @@ void AuthHttpClient::PostMultipartFile(
 			const QJsonObject root = document.object();
 			result.bizCode = root.value(QStringLiteral("code")).toInt(-1);
 			result.bizMsg = root.value(QStringLiteral("msg")).toString(result.bizMsg);
-			const QJsonObject data_obj = root.value(QStringLiteral("data")).toObject();
-			if (!data_obj.isEmpty()) {
-				result.data = data_obj.toVariantMap();
+			const QJsonValue data_value = root.value(QStringLiteral("data"));
+			result.dataValue = data_value.toVariant();
+			if (data_value.isObject()) {
+				const QJsonObject data_obj = data_value.toObject();
+				if (!data_obj.isEmpty()) {
+					result.data = data_obj.toVariantMap();
+				}
 			}
 		}
 

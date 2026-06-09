@@ -33,12 +33,14 @@ NMainWindow::NMainWindow(QWidget* parent)
 	: SARibbonMainWindow(parent)
 #ifdef ENABLE_CLOUD_SERVER_MODULE
 	, _actionDocument(nullptr)
+	, _actionUpload(nullptr)
 #endif
 	, _actionNew(nullptr)
 	, _actionOpen(nullptr)
 	, _actionSave(nullptr)
-	, _currentFilePath()
-	, _nextFileContext()
+	, _actionSaveAs(nullptr)
+	, _currentFileState()
+	, _pendingOpenRequest()
 	, _homeWorkspace(nullptr)
 	, _toolLibDialog(nullptr)
 #ifdef ENABLE_CLOUD_SERVER_MODULE
@@ -54,8 +56,18 @@ NMainWindow::NMainWindow(QWidget* parent)
 	_actionNew = new QAction(QIcon(), tr("New"), this);
 	_actionOpen = new QAction(QIcon(), tr("Open"), this);
 	_actionSave = new QAction(QIcon(), tr("Save"), this);
+	_actionSaveAs = new QAction(QIcon(), tr("Save As"), this);
+
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+	_actionUpload = new QAction(QIcon(), tr("Upload"), this);
+#endif
 	connect(_actionOpen, &QAction::triggered, this, &NMainWindow::OnOpen);
 	connect(_actionSave, &QAction::triggered, this, &NMainWindow::OnSave);
+	connect(_actionSaveAs, &QAction::triggered, this, &NMainWindow::OnSaveAs);
+
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+	connect(_actionUpload, &QAction::triggered, this, &NMainWindow::OnUpload);
+#endif
 	connect(_actionNew, &QAction::triggered, this, &NMainWindow::OnNewProject);
 
 #ifdef ENABLE_CLOUD_SERVER_MODULE
@@ -109,15 +121,15 @@ void NMainWindow::InitCloudController()
 bool NMainWindow::OpenFile(const QString& file_name, const QString& backup_file, bool silent)
 {
 	Q_UNUSED(backup_file);
-	WorkspaceFileContext open_context = _nextFileContext;
-	_nextFileContext = WorkspaceFileContext{};
+	qianjizn::cloudserver::OpenRequestContext open_context = _pendingOpenRequest;
+	_pendingOpenRequest = qianjizn::cloudserver::OpenRequestContext{};
 
 	QString target_file = file_name.trimmed();
 	if (target_file.isEmpty()) {
 		target_file = QFileDialog::getOpenFileName(
 			this,
 			tr("Open QJP File"),
-			_currentFilePath,
+			_currentFileState.LocalFilePath(),
 			tr("QJP Files (*.qjp)"));
 		if (target_file.isEmpty()) {
 			return false;
@@ -145,6 +157,8 @@ bool NMainWindow::OpenFile(const QString& file_name, const QString& backup_file,
 		return false;
 	}
 
+	ApplyOpenedFileState(open_context);
+
 	const bool recent_list_updated = open_context.ShouldAddToLocalRecent()
 		&& AddRecentlyOpenedFile(open_context.filePath);
 #ifdef ENABLE_CLOUD_SERVER_MODULE
@@ -161,18 +175,78 @@ bool NMainWindow::SaveFile(bool silent)
 		return false;
 	}
 
-	const QString normalized_path = QFileInfo(_currentFilePath).absoluteFilePath().trimmed();
-	if (normalized_path.isEmpty()) {
+	const QString current_local_path = _currentFileState.LocalFilePath();
+	if (current_local_path.isEmpty()) {
+		return SaveAsFile(QString(), silent);
+	}
+
+	return SaveWorkspaceToPath(current_local_path, silent);
+}
+
+bool NMainWindow::SaveAsFile(const QString& file_path, bool silent)
+{
+	QString initial_path = file_path.trimmed();
+	if (initial_path.isEmpty()) {
+		initial_path = _currentFileState.LocalFilePath();
+	}
+	if (initial_path.isEmpty()) {
+		initial_path = QDir::homePath() + QDir::separator() + QStringLiteral("Untitled.qjp");
+	}
+
+	QString target_file = QFileDialog::getSaveFileName(
+		this,
+		tr("Save QJP File"),
+		initial_path,
+		tr("QJP Files (*.qjp)"));
+	if (target_file.trimmed().isEmpty()) {
+		return false;
+	}
+
+	QFileInfo target_info(target_file);
+	if (target_info.suffix().compare(QStringLiteral("qjp"), Qt::CaseInsensitive) != 0) {
+		target_file += QStringLiteral(".qjp");
+	}
+
+	const QString absolute_file_path = QFileInfo(target_file).absoluteFilePath().trimmed();
+	if (absolute_file_path.isEmpty()) {
+		if (!silent) {
+			QMessageBox::warning(this, tr("Warning"), tr("The selected save path is invalid."));
+		}
+		return false;
+	}
+
+	if (!SaveWorkspaceToPath(absolute_file_path, silent)) {
+		return false;
+	}
+
+	_currentFileState.AssignLocalFile(absolute_file_path);
+	if (_homeWorkspace) {
+		_homeWorkspace->SetViewportFilePath(absolute_file_path);
+	}
+
+	const bool recent_list_updated = AddRecentlyOpenedFile(absolute_file_path);
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+	if (recent_list_updated && _cloudController) {
+		_cloudController->NotifyRecentFilesChanged();
+	}
+#endif
+	return true;
+}
+
+bool NMainWindow::SaveWorkspaceToPath(const QString& file_path, bool silent)
+{
+	const QString absolute_file_path = QFileInfo(file_path).absoluteFilePath().trimmed();
+	if (absolute_file_path.isEmpty()) {
 		if (!silent) {
 			QMessageBox::warning(this, tr("Warning"), tr("There is no file to save."));
 		}
 		return false;
 	}
 
-	QFile file(normalized_path);
+	QFile file(absolute_file_path);
 	if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
 		if (!silent) {
-			QMessageBox::warning(this, tr("Warning"), tr("Failed to save file: %1").arg(normalized_path));
+			QMessageBox::warning(this, tr("Warning"), tr("Failed to save file: %1").arg(absolute_file_path));
 		}
 		return false;
 	}
@@ -185,13 +259,13 @@ bool NMainWindow::SaveFile(bool silent)
 
 	if (stream.status() != QTextStream::Ok) {
 		if (!silent) {
-			QMessageBox::warning(this, tr("Warning"), tr("Failed to write file: %1").arg(normalized_path));
+			QMessageBox::warning(this, tr("Warning"), tr("Failed to write file: %1").arg(absolute_file_path));
 		}
 		return false;
 	}
 
 	if (!silent && statusBar()) {
-		statusBar()->showMessage(tr("Saved file: %1").arg(QFileInfo(normalized_path).fileName()), 3000);
+		statusBar()->showMessage(tr("Saved file: %1").arg(QFileInfo(absolute_file_path).fileName()), 3000);
 	}
 	return true;
 }
@@ -202,8 +276,8 @@ bool NMainWindow::AddRecentlyOpenedFile(const QString& file_path)
 		return false;
 	}
 
-	const QString normalized_path = QDir::toNativeSeparators(QFileInfo(file_path).absoluteFilePath()).trimmed();
-	if (normalized_path.isEmpty()) {
+	const QString absolute_file_path = QDir::toNativeSeparators(QFileInfo(file_path).absoluteFilePath()).trimmed();
+	if (absolute_file_path.isEmpty()) {
 		return false;
 	}
 
@@ -213,8 +287,8 @@ bool NMainWindow::AddRecentlyOpenedFile(const QString& file_path)
 		file = QDir::toNativeSeparators(QFileInfo(file.trimmed()).absoluteFilePath()).trimmed();
 	}
 	files.removeAll(QString());
-	files.removeAll(normalized_path);
-	files.prepend(normalized_path);
+	files.removeAll(absolute_file_path);
+	files.prepend(absolute_file_path);
 	while (files.size() > 9) {
 		files.removeLast();
 	}
@@ -229,11 +303,11 @@ bool NMainWindow::LoadTextFileIntoWorkspace(const QString& file_path, bool silen
 		return false;
 	}
 
-	const QString normalized_path = QFileInfo(file_path).absoluteFilePath();
-	QFile file(normalized_path);
+	const QString absolute_file_path = QFileInfo(file_path).absoluteFilePath();
+	QFile file(absolute_file_path);
 	if (!file.open(QIODevice::ReadOnly)) {
 		if (!silent) {
-			QMessageBox::warning(this, tr("Warning"), tr("Failed to open file: %1").arg(normalized_path));
+			QMessageBox::warning(this, tr("Warning"), tr("Failed to open file: %1").arg(absolute_file_path));
 		}
 		return false;
 	}
@@ -257,19 +331,37 @@ bool NMainWindow::LoadTextFileIntoWorkspace(const QString& file_path, bool silen
 	}
 
 	_homeWorkspace->SetViewportText(text);
-	_homeWorkspace->SetViewportFilePath(normalized_path);
-	_currentFilePath = normalized_path;
+	_homeWorkspace->SetViewportFilePath(absolute_file_path);
 
 	if (!silent && statusBar()) {
-		statusBar()->showMessage(tr("Opened file: %1").arg(QFileInfo(normalized_path).fileName()), 3000);
+		statusBar()->showMessage(tr("Opened file: %1").arg(QFileInfo(absolute_file_path).fileName()), 3000);
 	}
 
 	return true;
 }
 
-void NMainWindow::SetNextFileContext(const WorkspaceFileContext& context)
+void NMainWindow::ApplyOpenedFileState(const qianjizn::cloudserver::OpenRequestContext& open_context)
 {
-	_nextFileContext = context;
+	const QString requested_path = open_context.filePath.trimmed();
+	const QString absolute_file_path = requested_path.isEmpty()
+		? QString()
+		: QFileInfo(requested_path).absoluteFilePath().trimmed();
+	if (open_context.IsCloud()) {
+		_currentFileState.AssignCloudFile(absolute_file_path, open_context.fileUuid);
+		return;
+	}
+
+	if (absolute_file_path.isEmpty()) {
+		_currentFileState.ClearToDraft();
+		return;
+	}
+
+	_currentFileState.AssignLocalFile(absolute_file_path);
+}
+
+void NMainWindow::SetPendingOpenRequest(const qianjizn::cloudserver::OpenRequestContext& context)
+{
+	_pendingOpenRequest = context;
 }
 
 bool NMainWindow::event(QEvent* event)
@@ -320,12 +412,16 @@ void NMainWindow::InitRibbonBar()
 	ribbon_bar_widget->showMinimumModeButton(true);
 
 	if (SARibbonQuickAccessBar* quick_access_bar = ribbon_bar_widget->quickAccessBar()) {
-	#ifdef ENABLE_CLOUD_SERVER_MODULE
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 		quick_access_bar->addAction(_actionDocument);
-	#endif
+#endif
 		quick_access_bar->addAction(_actionNew);
 		quick_access_bar->addAction(_actionOpen);
 		quick_access_bar->addAction(_actionSave);
+		quick_access_bar->addAction(_actionSaveAs);
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+		quick_access_bar->addAction(_actionUpload);
+#endif
 	}
 
 	const auto makeAction = [this](const QString& text, QStyle::StandardPixmap icon_type) {
@@ -355,6 +451,8 @@ void NMainWindow::InitRibbonBar()
 			_actionNew,
 			_actionOpen,
 			_actionSave,
+			_actionSaveAs,
+			_actionUpload,
 		});
 #else
 	fillPanel(category_file->addPanel(QStringLiteral("Project")),
@@ -362,6 +460,7 @@ void NMainWindow::InitRibbonBar()
 			_actionNew,
 			_actionOpen,
 			_actionSave,
+			_actionSaveAs,
 		});
 #endif
 
@@ -421,6 +520,32 @@ void NMainWindow::OnSave()
 	}
 #endif
 }
+
+void NMainWindow::OnSaveAs()
+{
+	if (!SaveAsFile(QString(), false)) {
+		return;
+	}
+
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+	if (_cloudController) {
+		_cloudController->SaveCloudFileIfNeeded();
+	}
+#endif
+}
+
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+void NMainWindow::OnUpload()
+{
+	if (!SaveFile(false)) {
+		return;
+	}
+
+	if (_cloudController) {
+		_cloudController->ShowUploadTargetPicker();
+	}
+}
+#endif
 
 void NMainWindow::OnNewProject()
 {

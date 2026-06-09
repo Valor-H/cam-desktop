@@ -25,6 +25,7 @@ public:
 	/** 析构账号认证对话框。 */
 	~AccountAuthDialog() override;
 
+
 signals:
 	/** 在认证成功后发送登录结果数据。 */
 	void AuthSucceeded(const QVariantMap& payload);

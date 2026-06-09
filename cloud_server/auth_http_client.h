@@ -21,6 +21,7 @@ public:
 		int         httpStatus{ 0 };       /** 记录 HTTP 响应状态码。 */
 		int         bizCode{ -1 };         /** 记录业务层返回码。 */
 		QString     bizMsg;                 /** 记录业务层返回消息。 */
+		QVariant    dataValue;              /** 保存业务层返回 data 原值，支持对象、数组和标量。 */
 		QVariantMap data;                   /** 保存业务层返回数据。 */
 	};
 	/** 封装文件下载请求结果。 */

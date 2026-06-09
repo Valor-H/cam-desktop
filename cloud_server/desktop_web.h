@@ -45,4 +45,10 @@ inline QUrl BuildRecentFilesUrl(const QUrl& frontend_base)
 	return frontend_base.resolved(QUrl(QStringLiteral("recent-files")));
 }
 
+/** 构建桌面上传选择页地址。 */
+inline QUrl BuildDesktopUploadPickerUrl(const QUrl& frontend_base)
+{
+	return frontend_base.resolved(QUrl(QStringLiteral("desktop-upload-picker")));
+}
+
 QJ_NAMESPACE_FIT_CLOUD_SERVER_END

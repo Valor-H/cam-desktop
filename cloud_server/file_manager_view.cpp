@@ -491,7 +491,7 @@ void FileManagerView::HandleOpenRecentFileRequest(const QVariantMap& payload, co
 		if (query) {
 			ReplyOpenRecentFileError(*query,
 				QStringLiteral("Only recent desktop QJP files can be opened here."),
-				 s_desktopQueryErrorBadRequest);
+				s_desktopQueryErrorBadRequest);
 		}
 		return;
 	}
@@ -507,7 +507,7 @@ void FileManagerView::HandleOpenRecentFileRequest(const QVariantMap& payload, co
 		if (query) {
 			ReplyOpenRecentFileError(*query,
 				QStringLiteral("The local QJP file is invalid or cannot be opened."),
-				 s_desktopQueryErrorBadRequest);
+				s_desktopQueryErrorBadRequest);
 		}
 		return;
 	}

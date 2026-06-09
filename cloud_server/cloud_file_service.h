@@ -25,16 +25,20 @@ public:
 	explicit CloudFileService(UserAuthService* auth_service, QObject* parent = nullptr);
 	~CloudFileService() override;
 
-	void ClearCurrentFile();
-	void TrackOpenedLocalFile(const QString& file_path);
-	void TrackOpenedCloudFile(const QString& file_path, const QString& file_uuid);
-	bool IsCurrentFileCloud() const;
 	bool SaveInFlight() const;
+	bool UploadFileToTarget(const QString& local_file_path,
+		const QString& folder_uuid,
+		const QString& team_uuid,
+		SaveCallback callback,
+		QString* error_message = nullptr);
 	bool OpenCloudFile(const QString& file_uuid,
 		const QString& suggested_file_name,
 		OpenCallback callback,
 		QString* error_message = nullptr);
-	bool SaveCurrentCloudFile(SaveCallback callback, QString* error_message = nullptr);
+	bool SaveCloudFile(const QString& local_file_path,
+		const QString& file_uuid,
+		SaveCallback callback,
+		QString* error_message = nullptr);
 
 private:
 	AuthHttpClient* EnsureHttpClient();
@@ -42,8 +46,6 @@ private:
 
 	UserAuthService* _authService;
 	AuthHttpClient* _httpClient;
-	QString _currentOpenedFilePath;
-	QString _currentOpenedCloudFileUuid;
 	bool _saveInFlight;
 };
 

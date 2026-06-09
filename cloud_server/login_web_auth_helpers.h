@@ -6,12 +6,12 @@
 namespace LoginWebAuth
 {
 	/** 定义认证网页路由类型。 */
-		enum class AuthRoute : int
+	enum class AuthRoute : int
 	{
-			LOGIN,          /** 登录页面路由。 */
-			REGISTER,       /** 注册页面路由。 */
-			RESET,          /** 重置密码页面路由。 */
-			UNKNOWN         /** 未知页面路由。 */
+		LOGIN,          /** 登录页面路由。 */
+		REGISTER,       /** 注册页面路由。 */
+		RESET,          /** 重置密码页面路由。 */
+		UNKNOWN         /** 未知页面路由。 */
 	};
 
 	/** 从 URL 中提取认证路由路径。 */

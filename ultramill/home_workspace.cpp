@@ -8,6 +8,14 @@
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
+namespace
+{
+	QString DraftPlaceholderText()
+	{
+		return HomeWorkspace::tr("Start editing here. Saving an unnamed document will trigger Save As.");
+	}
+}
+
 HomeWorkspace::HomeWorkspace(QWidget* parent)
 	: QWidget(parent)
 	, _viewportEditor(nullptr)
@@ -89,7 +97,7 @@ HomeWorkspace::HomeWorkspace(QWidget* parent)
 
 	_viewportEditor = new QPlainTextEdit(right_viewport);
 	_viewportEditor->setObjectName(QStringLiteral("mockViewportEditor"));
-	_viewportEditor->setPlaceholderText(tr("Open a UTF-8 txt file to preview its content here."));
+	_viewportEditor->setPlaceholderText(DraftPlaceholderText());
 	_viewportEditor->setLineWrapMode(QPlainTextEdit::NoWrap);
 	_viewportEditor->setStyleSheet(QStringLiteral(
 		"#mockViewportEditor {"
@@ -134,7 +142,7 @@ void HomeWorkspace::SetViewportFilePath(const QString& file_path)
 	const QString normalized_path = file_path.trimmed();
 	_viewportEditor->setToolTip(normalized_path);
 	if (normalized_path.isEmpty()) {
-		_viewportEditor->setPlaceholderText(tr("Open a UTF-8 txt file to preview its content here."));
+		_viewportEditor->setPlaceholderText(DraftPlaceholderText());
 		return;
 	}
 
@@ -148,7 +156,7 @@ void HomeWorkspace::ClearViewport()
 	}
 	_viewportEditor->clear();
 	_viewportEditor->setToolTip(QString());
-	_viewportEditor->setPlaceholderText(tr("Open a UTF-8 txt file to preview its content here."));
+	_viewportEditor->setPlaceholderText(DraftPlaceholderText());
 }
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END

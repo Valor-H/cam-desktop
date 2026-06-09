@@ -6,6 +6,7 @@
 #endif
 
 #include <QObject>
+#include <QVariantMap>
 
 class QAction;
 class QEvent;
@@ -21,6 +22,7 @@ class UserAuthService;
 class DesktopWebServer;
 class FileManagerView;
 class TitleBarUserChip;
+class UploadPickerDialog;
 #endif
 QJ_NAMESPACE_END1
 
@@ -48,6 +50,7 @@ public:
 	void SaveCloudFileIfNeeded();
 	void HideFileManagerView();
 	void NotifyRecentFilesChanged();
+	void ShowUploadTargetPicker();
 
 signals:
 	void OpenRequested();
@@ -73,9 +76,12 @@ private:
 	void SetSyncStatusVisual(SyncStatusVisual visual);
 	void UpdateFileManagerOverlayGeometry();
 	void OpenFileManager();
+	void OpenCloudFileInWorkspace(const QString& file_path, const QString& file_uuid);
 	void ShowFileManagerWorkspace(const QUrl& page_url);
 	void ShowAccountAuthDialog();
 	void ShowAccountMenu();
+	void OpenUploadedCloudFile(const QString& file_uuid, const QString& suggested_file_name);
+	void HandleUploadTargetSelected(const QVariantMap& payload);
 	void Logout();
 	void OpenPersonalProfile();
 	void OpenTeam();
@@ -85,6 +91,7 @@ private:
 	qianjizn::cloudserver::CloudFileService* _cloudFileService;
 	qianjizn::cloudserver::DesktopWebServer* _desktopWebServer;
 	qianjizn::cloudserver::FileManagerView* _fileManagerView;
+	qianjizn::cloudserver::UploadPickerDialog* _uploadTargetPickerDialog;
 	QToolButton* _syncStatusButton;
 	QToolButton* _shareButton;
 	qianjizn::cloudserver::TitleBarUserChip* _userChip;
@@ -92,6 +99,7 @@ private:
 	QAction* _personalCenterAction;
 	QAction* _teamAction;
 	QAction* _logoutAction;
+	QVariantMap _lastUploadTarget;
 #else
 	NMainWindow* _mainWindow;
 #endif

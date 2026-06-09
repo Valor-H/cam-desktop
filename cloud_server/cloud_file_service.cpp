@@ -53,40 +53,93 @@ CloudFileService::CloudFileService(UserAuthService* auth_service, QObject* paren
 	: QObject(parent)
 	, _authService(auth_service)
 	, _httpClient(nullptr)
-	, _currentOpenedFilePath()
-	, _currentOpenedCloudFileUuid()
 	, _saveInFlight(false)
 {
 }
 
 CloudFileService::~CloudFileService() = default;
 
-void CloudFileService::ClearCurrentFile()
-{
-	_currentOpenedFilePath.clear();
-	_currentOpenedCloudFileUuid.clear();
-}
-
-void CloudFileService::TrackOpenedLocalFile(const QString& file_path)
-{
-	_currentOpenedFilePath = file_path;
-	_currentOpenedCloudFileUuid.clear();
-}
-
-void CloudFileService::TrackOpenedCloudFile(const QString& file_path, const QString& file_uuid)
-{
-	_currentOpenedFilePath = file_path;
-	_currentOpenedCloudFileUuid = file_uuid.trimmed();
-}
-
-bool CloudFileService::IsCurrentFileCloud() const
-{
-	return !_currentOpenedCloudFileUuid.isEmpty();
-}
-
 bool CloudFileService::SaveInFlight() const
 {
 	return _saveInFlight;
+}
+
+bool CloudFileService::UploadFileToTarget(const QString& local_file_path,
+	const QString& folder_uuid,
+	const QString& team_uuid,
+	SaveCallback callback,
+	QString* error_message)
+{
+	if (_saveInFlight) {
+		if (error_message) {
+			*error_message = QStringLiteral("Cloud upload is already running.");
+		}
+		return false;
+	}
+
+	const QString normalized_folder_uuid = folder_uuid.trimmed();
+	if (normalized_folder_uuid.isEmpty()) {
+		if (error_message) {
+			*error_message = QStringLiteral("Upload target folder is missing.");
+		}
+		return false;
+	}
+
+	const QString normalized_local_file_path = local_file_path.trimmed();
+	const QFileInfo source_file(normalized_local_file_path);
+	if (!source_file.exists() || !source_file.isFile()) {
+		if (error_message) {
+			*error_message = QStringLiteral("Current file is missing and cannot be uploaded.");
+		}
+		return false;
+	}
+
+	const QString token = _authService && _authService->Session()
+		? _authService->Session()->AuthToken().trimmed()
+		: QString();
+	if (token.isEmpty()) {
+		if (error_message) {
+			*error_message = QStringLiteral("Current session is missing token.");
+		}
+		return false;
+	}
+
+	AuthHttpClient* http_client = EnsureHttpClient();
+	if (!http_client) {
+		if (error_message) {
+			*error_message = QStringLiteral("Cloud upload client initialization failed.");
+		}
+		return false;
+	}
+
+	_saveInFlight = true;
+
+	QVariantMap form_fields{
+		{ QStringLiteral("parentUuid"), normalized_folder_uuid },
+	};
+
+	const QString normalized_team_uuid = team_uuid.trimmed();
+	QString api_path = QStringLiteral("/api/file/addFile");
+	if (!normalized_team_uuid.isEmpty()) {
+		form_fields.insert(QStringLiteral("teamUuid"), normalized_team_uuid);
+		api_path = QStringLiteral("/api/file/addTeamFile");
+	}
+
+	http_client->PostMultipartFile(
+		api_path,
+		token,
+		QStringLiteral("files"),
+		normalized_local_file_path,
+		form_fields,
+		60,
+		[this, cb = std::move(callback)](const AuthHttpClient::Response& response) mutable {
+			_saveInFlight = false;
+			if (cb) {
+				cb(response);
+			}
+		});
+
+	return true;
 }
 
 bool CloudFileService::OpenCloudFile(const QString& file_uuid,
@@ -167,7 +220,10 @@ bool CloudFileService::OpenCloudFile(const QString& file_uuid,
 	return true;
 }
 
-bool CloudFileService::SaveCurrentCloudFile(SaveCallback callback, QString* error_message)
+bool CloudFileService::SaveCloudFile(const QString& local_file_path,
+	const QString& file_uuid,
+	SaveCallback callback,
+	QString* error_message)
 {
 	if (_saveInFlight) {
 		if (error_message) {
@@ -176,14 +232,16 @@ bool CloudFileService::SaveCurrentCloudFile(SaveCallback callback, QString* erro
 		return false;
 	}
 
-	if (_currentOpenedCloudFileUuid.isEmpty()) {
+	const QString normalized_file_uuid = file_uuid.trimmed();
+	if (normalized_file_uuid.isEmpty()) {
 		if (error_message) {
 			*error_message = QStringLiteral("Current file is not a cloud file.");
 		}
 		return false;
 	}
 
-	const QFileInfo source_file(_currentOpenedFilePath);
+	const QString normalized_local_file_path = local_file_path.trimmed();
+	const QFileInfo source_file(normalized_local_file_path);
 	if (!source_file.exists() || !source_file.isFile()) {
 		if (error_message) {
 			*error_message = QStringLiteral("Current cloud cache file is missing and cannot be uploaded.");
@@ -212,7 +270,7 @@ bool CloudFileService::SaveCurrentCloudFile(SaveCallback callback, QString* erro
 	_saveInFlight = true;
 
 	const QVariantMap form_fields{
-		{ QStringLiteral("fileUuid"), _currentOpenedCloudFileUuid },
+		{ QStringLiteral("fileUuid"), normalized_file_uuid },
 		{ QStringLiteral("fileVersion"), QStringLiteral("666") },
 		{ QStringLiteral("override"), QStringLiteral("true") },
 	};
@@ -221,7 +279,7 @@ bool CloudFileService::SaveCurrentCloudFile(SaveCallback callback, QString* erro
 		QStringLiteral("/api/file/updateFile"),
 		token,
 		QStringLiteral("file"),
-		_currentOpenedFilePath,
+		normalized_local_file_path,
 		form_fields,
 		60,
 		[this, cb = std::move(callback)](const AuthHttpClient::Response& response) mutable {
