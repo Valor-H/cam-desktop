@@ -1,9 +1,9 @@
 #pragma once
 
 #include "ultramill_global.h"
-#ifdef ENABLE_CLOUD_SERVER_MODULE
+#include <cloud_server/cloud_file_state.h>
+#include <cloud_server/open_request_context.h>
 #include <cloud_server/user_auth_service.h>
-#endif
 
 #include <QObject>
 #include <QVariantMap>
@@ -16,14 +16,12 @@ class QWidget;
 class QToolButton;
 
 QJ_NAMESPACE_BEGIN1(cloudserver)
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 class CloudFileService;
 class UserAuthService;
 class DesktopWebServer;
 class FileManagerView;
 class TitleBarUserChip;
 class UploadPickerDialog;
-#endif
 QJ_NAMESPACE_END1
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
@@ -38,10 +36,13 @@ public:
 	explicit CloudController(NMainWindow* main_window);
 	~CloudController() override;
 
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 	qianjizn::cloudserver::UserAuthService& UserAuth() { return _userAuth; }
 	const qianjizn::cloudserver::UserAuthService& UserAuth() const { return _userAuth; }
-#endif
+	const qianjizn::cloudserver::CloudFileState& CurrentFileState() const { return _currentFileState; }
+	void SetPendingOpenRequest(const qianjizn::cloudserver::OpenRequestContext& context) { _pendingOpenRequest = context; }
+	qianjizn::cloudserver::OpenRequestContext TakePendingOpenRequest();
+	void ApplyOpenedFileState(const qianjizn::cloudserver::OpenRequestContext& open_context);
+	void AssignLocalFile(const QString& file_path) { _currentFileState.AssignLocalFile(file_path); }
 
 	void Initialize();
 	void HandleMainWindowEvent(QEvent* event);
@@ -61,7 +62,6 @@ signals:
 	void AboutRequested();
 
 private:
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 	enum class SyncStatusVisual {
 		NotUploaded,
 		Synced,
@@ -70,7 +70,6 @@ private:
 	bool EnsureDesktopWebServerReady(bool show_warning = true);
 	void InitUserChip();
 	void InitSyncStatusButton();
-	void InitShareButton();
 	void RefreshUserChipFromSession();
 	void SyncTitleBarWidgets();
 	void SetSyncStatusVisual(SyncStatusVisual visual);
@@ -93,16 +92,14 @@ private:
 	qianjizn::cloudserver::FileManagerView* _fileManagerView;
 	qianjizn::cloudserver::UploadPickerDialog* _uploadTargetPickerDialog;
 	QToolButton* _syncStatusButton;
-	QToolButton* _shareButton;
 	qianjizn::cloudserver::TitleBarUserChip* _userChip;
 	QMenu* _loginMenu;
 	QAction* _personalCenterAction;
 	QAction* _teamAction;
 	QAction* _logoutAction;
 	QVariantMap _lastUploadTarget;
-#else
-	NMainWindow* _mainWindow;
-#endif
+	qianjizn::cloudserver::CloudFileState _currentFileState;
+	qianjizn::cloudserver::OpenRequestContext _pendingOpenRequest;
 };
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END

@@ -9,6 +9,15 @@ file(GLOB ULTRAMILL_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
 
+if(NOT ENABLE_CLOUD_SERVER_MODULE)
+    list(REMOVE_ITEM ULTRAMILL_HEADERS
+        "${CMAKE_CURRENT_SOURCE_DIR}/cloud_controller.h"
+    )
+    list(REMOVE_ITEM ULTRAMILL_SOURCES
+        "${CMAKE_CURRENT_SOURCE_DIR}/cloud_controller.cpp"
+    )
+endif()
+
 add_library(ultramill STATIC
     ${ULTRAMILL_HEADERS}
     ${ULTRAMILL_SOURCES}

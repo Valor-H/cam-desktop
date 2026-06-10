@@ -3,9 +3,6 @@
 #include "ultramill_global.h"
 #include <SARibbonBar/SARibbonMainWindow.h>
 
-#include <cloud_server/cloud_file_state.h>
-#include <cloud_server/open_request_context.h>
-
 #include <QString>
 
 class QAction;
@@ -34,11 +31,9 @@ public:
     explicit NMainWindow(QWidget* parent = nullptr);
     ~NMainWindow() override;
 
-    const qianjizn::cloudserver::CloudFileState& CurrentFileState() const { return _currentFileState; }
     bool OpenFile(const QString& file_name, const QString& backup_file = "", bool silent = false);
     bool SaveFile(bool silent = false);
 	bool SaveAsFile(const QString& file_path = QString(), bool silent = false);
-    void SetPendingOpenRequest(const qianjizn::cloudserver::OpenRequestContext& context);
 #ifdef ENABLE_CLOUD_SERVER_MODULE
     qianjizn::cloudserver::UserAuthService& UserAuth();
     const qianjizn::cloudserver::UserAuthService& UserAuth() const;
@@ -51,7 +46,6 @@ private:
     bool AddRecentlyOpenedFile(const QString& file_path);
     bool LoadTextFileIntoWorkspace(const QString& file_path, bool silent);
 	bool SaveWorkspaceToPath(const QString& file_path, bool silent);
-    void ApplyOpenedFileState(const qianjizn::cloudserver::OpenRequestContext& open_context);
     void InitializeMainWindowShell();
     void ApplyWindowPresentation();
 #ifdef ENABLE_CLOUD_SERVER_MODULE
@@ -78,8 +72,6 @@ private:
     QAction* _actionOpen;
     QAction* _actionSave;
 	QAction* _actionSaveAs;
-    qianjizn::cloudserver::CloudFileState _currentFileState;
-    qianjizn::cloudserver::OpenRequestContext _pendingOpenRequest;
     HomeWorkspace* _homeWorkspace;
     ToolLibDialog* _toolLibDialog;
 #ifdef ENABLE_CLOUD_SERVER_MODULE

@@ -39,8 +39,6 @@ NMainWindow::NMainWindow(QWidget* parent)
 	, _actionOpen(nullptr)
 	, _actionSave(nullptr)
 	, _actionSaveAs(nullptr)
-	, _currentFileState()
-	, _pendingOpenRequest()
 	, _homeWorkspace(nullptr)
 	, _toolLibDialog(nullptr)
 #ifdef ENABLE_CLOUD_SERVER_MODULE
@@ -121,21 +119,36 @@ void NMainWindow::InitCloudController()
 bool NMainWindow::OpenFile(const QString& file_name, const QString& backup_file, bool silent)
 {
 	Q_UNUSED(backup_file);
-	qianjizn::cloudserver::OpenRequestContext open_context = _pendingOpenRequest;
-	_pendingOpenRequest = qianjizn::cloudserver::OpenRequestContext{};
+	bool update_local_recent = true;
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+	qianjizn::cloudserver::OpenRequestContext open_context;
+	if (_cloudController) {
+		open_context = _cloudController->TakePendingOpenRequest();
+	}
+	update_local_recent = open_context.ShouldAddToLocalRecent();
+#endif
 
 	QString target_file = file_name.trimmed();
 	if (target_file.isEmpty()) {
+		QString initial_open_path;
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+		if (_cloudController) {
+			initial_open_path = _cloudController->CurrentFileState().LocalFilePath();
+		}
+#endif
 		target_file = QFileDialog::getOpenFileName(
 			this,
 			tr("Open QJP File"),
-			_currentFileState.LocalFilePath(),
+			initial_open_path,
 			tr("QJP Files (*.qjp)"));
 		if (target_file.isEmpty()) {
 			return false;
 		}
 	}
+	const QString absolute_target_file = QFileInfo(target_file).absoluteFilePath().trimmed();
+#ifdef ENABLE_CLOUD_SERVER_MODULE
 	open_context.filePath = QFileInfo(target_file).absoluteFilePath();
+#endif
 
 	const QFileInfo file_info(target_file);
 	if (!file_info.exists() || !file_info.isFile()) {
@@ -157,10 +170,13 @@ bool NMainWindow::OpenFile(const QString& file_name, const QString& backup_file,
 		return false;
 	}
 
-	ApplyOpenedFileState(open_context);
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+	if (_cloudController) {
+		_cloudController->ApplyOpenedFileState(open_context);
+	}
+#endif
 
-	const bool recent_list_updated = open_context.ShouldAddToLocalRecent()
-		&& AddRecentlyOpenedFile(open_context.filePath);
+	const bool recent_list_updated = update_local_recent && AddRecentlyOpenedFile(absolute_target_file);
 #ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (recent_list_updated && _cloudController) {
 		_cloudController->NotifyRecentFilesChanged();
@@ -175,7 +191,12 @@ bool NMainWindow::SaveFile(bool silent)
 		return false;
 	}
 
-	const QString current_local_path = _currentFileState.LocalFilePath();
+	QString current_local_path;
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+	if (_cloudController) {
+		current_local_path = _cloudController->CurrentFileState().LocalFilePath();
+	}
+#endif
 	if (current_local_path.isEmpty()) {
 		return SaveAsFile(QString(), silent);
 	}
@@ -186,9 +207,11 @@ bool NMainWindow::SaveFile(bool silent)
 bool NMainWindow::SaveAsFile(const QString& file_path, bool silent)
 {
 	QString initial_path = file_path.trimmed();
-	if (initial_path.isEmpty()) {
-		initial_path = _currentFileState.LocalFilePath();
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+	if (initial_path.isEmpty() && _cloudController) {
+		initial_path = _cloudController->CurrentFileState().LocalFilePath();
 	}
+#endif
 	if (initial_path.isEmpty()) {
 		initial_path = QDir::homePath() + QDir::separator() + QStringLiteral("Untitled.qjp");
 	}
@@ -219,7 +242,11 @@ bool NMainWindow::SaveAsFile(const QString& file_path, bool silent)
 		return false;
 	}
 
-	_currentFileState.AssignLocalFile(absolute_file_path);
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+	if (_cloudController) {
+		_cloudController->AssignLocalFile(absolute_file_path);
+	}
+#endif
 	if (_homeWorkspace) {
 		_homeWorkspace->SetViewportFilePath(absolute_file_path);
 	}
@@ -338,30 +365,6 @@ bool NMainWindow::LoadTextFileIntoWorkspace(const QString& file_path, bool silen
 	}
 
 	return true;
-}
-
-void NMainWindow::ApplyOpenedFileState(const qianjizn::cloudserver::OpenRequestContext& open_context)
-{
-	const QString requested_path = open_context.filePath.trimmed();
-	const QString absolute_file_path = requested_path.isEmpty()
-		? QString()
-		: QFileInfo(requested_path).absoluteFilePath().trimmed();
-	if (open_context.IsCloud()) {
-		_currentFileState.AssignCloudFile(absolute_file_path, open_context.fileUuid);
-		return;
-	}
-
-	if (absolute_file_path.isEmpty()) {
-		_currentFileState.ClearToDraft();
-		return;
-	}
-
-	_currentFileState.AssignLocalFile(absolute_file_path);
-}
-
-void NMainWindow::SetPendingOpenRequest(const qianjizn::cloudserver::OpenRequestContext& context)
-{
-	_pendingOpenRequest = context;
 }
 
 bool NMainWindow::event(QEvent* event)

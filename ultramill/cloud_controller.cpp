@@ -1,7 +1,6 @@
 #include "cloud_controller.h"
 
 #include "nmainwindow.h"
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 #include <cloud_server/cloud_file_state.h>
 #include <cloud_server/desktop_web.h>
 #include <cloud_server/desktop_web_server.h>
@@ -22,6 +21,7 @@
 #include <QTimer>
 #include <QToolButton>
 #include <QWidget>
+#include <QFileInfo>
 
 #include <QCefContext.h>
 
@@ -39,12 +39,10 @@ namespace
 		return response.data;
 	}
 }
-#endif
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_BEGIN
 
 CloudController::CloudController(NMainWindow* main_window)
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 	: QObject(main_window)
 	, _mainWindow(main_window)
 	, _userAuth(qianjizn::cloudserver::CloudServerConfig{})
@@ -53,13 +51,14 @@ CloudController::CloudController(NMainWindow* main_window)
 	, _fileManagerView(nullptr)
 	, _uploadTargetPickerDialog(nullptr)
 	, _syncStatusButton(nullptr)
-	, _shareButton(nullptr)
 	, _userChip(nullptr)
 	, _loginMenu(nullptr)
 	, _personalCenterAction(nullptr)
 	, _teamAction(nullptr)
 	, _logoutAction(nullptr)
 	, _lastUploadTarget()
+	, _currentFileState()
+	, _pendingOpenRequest()
 {
 	connect(_userAuth.Session(), &UserSession::AuthStateChanged, this, &CloudController::RefreshUserChipFromSession);
 	connect(_userAuth.Session(), &UserSession::UserProfileChanged, this, &CloudController::RefreshUserChipFromSession);
@@ -67,30 +66,47 @@ CloudController::CloudController(NMainWindow* main_window)
 	_cloudFileService = new qianjizn::cloudserver::CloudFileService(&_userAuth, this);
 	_desktopWebServer = new qianjizn::cloudserver::DesktopWebServer(&_userAuth, this);
 }
-#else
-	: QObject(main_window)
-	, _mainWindow(main_window)
-{
-}
-#endif
 
 CloudController::~CloudController() = default;
 
+qianjizn::cloudserver::OpenRequestContext CloudController::TakePendingOpenRequest()
+{
+	qianjizn::cloudserver::OpenRequestContext context = _pendingOpenRequest;
+	_pendingOpenRequest = qianjizn::cloudserver::OpenRequestContext{};
+	return context;
+}
+
+void CloudController::ApplyOpenedFileState(const qianjizn::cloudserver::OpenRequestContext& open_context)
+{
+	const QString requested_path = open_context.filePath.trimmed();
+	const QString absolute_file_path = requested_path.isEmpty()
+		? QString()
+		: QFileInfo(requested_path).absoluteFilePath().trimmed();
+	if (open_context.IsCloud()) {
+		_currentFileState.AssignCloudFile(absolute_file_path, open_context.fileUuid);
+		return;
+	}
+
+	if (absolute_file_path.isEmpty()) {
+		_currentFileState.ClearToDraft();
+		return;
+	}
+
+	_currentFileState.AssignLocalFile(absolute_file_path);
+}
+
 void CloudController::Initialize()
 {
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 	InitUserChip();
 	EnsureDesktopWebServerReady();
 	RefreshUserChipFromSession();
 	_userAuth.InitFromStoredToken();
 	HideFileManagerView();
 	SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
-#endif
 }
 
 void CloudController::HandleMainWindowEvent(QEvent* event)
 {
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (event && event->type() == QEvent::WindowActivate) {
 		_userAuth.OnWindowActivateEvent();
 		if (_fileManagerView && _fileManagerView->isVisible()) {
@@ -103,14 +119,10 @@ void CloudController::HandleMainWindowEvent(QEvent* event)
 			|| event->type() == QEvent::LayoutRequest || event->type() == QEvent::Show)) {
 		UpdateFileManagerOverlayGeometry();
 	}
-#else
-	Q_UNUSED(event);
-#endif
 }
 
 void CloudController::ToggleDocumentOverlay()
 {
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (_fileManagerView && _fileManagerView->isVisible()) {
 		HideFileManagerView();
 		return;
@@ -118,32 +130,26 @@ void CloudController::ToggleDocumentOverlay()
 
 	OpenFileManager();
 	emit DocumentOverlayVisibleChanged(_fileManagerView && _fileManagerView->isVisible());
-#else
-	emit DocumentOverlayVisibleChanged(false);
-#endif
 }
 
 void CloudController::PrepareForLocalOpen()
 {
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 	HideFileManagerView();
 	if (_mainWindow) {
 		qianjizn::cloudserver::OpenRequestContext context;
 		context.source = qianjizn::cloudserver::OpenRequestSource::Local;
-		_mainWindow->SetPendingOpenRequest(context);
+		SetPendingOpenRequest(context);
 	}
 	SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
-#endif
 }
 
 void CloudController::SaveCloudFileIfNeeded()
 {
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (!_cloudFileService || !_mainWindow) {
 		return;
 	}
 
-	const qianjizn::cloudserver::CloudFileState& document = _mainWindow->CurrentFileState();
+	const qianjizn::cloudserver::CloudFileState& document = CurrentFileState();
 	if (!document.IsCloud()) {
 		if (_mainWindow && _mainWindow->statusBar()) {
 			_mainWindow->statusBar()->showMessage(tr("Local file save completed."), 3000);
@@ -197,33 +203,25 @@ void CloudController::SaveCloudFileIfNeeded()
 	if (_mainWindow && _mainWindow->statusBar()) {
 		_mainWindow->statusBar()->showMessage(tr("Saving cloud file..."), 2000);
 	}
-#endif
 }
 
 void CloudController::HideFileManagerView()
 {
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (_fileManagerView) {
 		_fileManagerView->hide();
 	}
 	emit DocumentOverlayVisibleChanged(false);
-#else
-	emit DocumentOverlayVisibleChanged(false);
-#endif
 }
 
 void CloudController::NotifyRecentFilesChanged()
 {
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (_fileManagerView) {
 		_fileManagerView->NotifyRecentFilesChanged();
 	}
-#endif
 }
 
 void CloudController::ShowUploadTargetPicker()
 {
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (!_mainWindow) {
 		return;
 	}
@@ -257,10 +255,8 @@ void CloudController::ShowUploadTargetPicker()
 		&CloudController::HandleUploadTargetSelected);
 	connect(_uploadTargetPickerDialog, &QObject::destroyed, this, [this]() { _uploadTargetPickerDialog = nullptr; });
 	_uploadTargetPickerDialog->exec();
-#endif
 }
 
-#ifdef ENABLE_CLOUD_SERVER_MODULE
 bool CloudController::EnsureDesktopWebServerReady(bool show_warning)
 {
 	if (!_desktopWebServer) {
@@ -297,7 +293,6 @@ void CloudController::InitUserChip()
 	bar->addWidget(spacer_widget);
 
 	InitSyncStatusButton();
-	InitShareButton();
 	_userChip = new qianjizn::cloudserver::TitleBarUserChip(bar, _userAuth.ApiBaseUrl());
 	bar->addWidget(_userChip);
 
@@ -374,49 +369,6 @@ void CloudController::InitSyncStatusButton()
 	right_group->addWidget(_syncStatusButton);
 }
 
-void CloudController::InitShareButton()
-{
-	if (_shareButton) {
-		return;
-	}
-
-	if (!_mainWindow) {
-		return;
-	}
-
-	SARibbonBar* ribbon_bar = _mainWindow->ribbonBar();
-	if (!ribbon_bar) {
-		return;
-	}
-
-	SARibbonButtonGroupWidget* right_group = ribbon_bar->activeRightButtonGroup();
-	if (!right_group) {
-		return;
-	}
-
-	_shareButton = new QToolButton(right_group);
-	_shareButton->setObjectName(QStringLiteral("CamShareButton"));
-	_shareButton->setAutoRaise(true);
-	_shareButton->setFocusPolicy(Qt::NoFocus);
-	_shareButton->setCursor(Qt::PointingHandCursor);
-	_shareButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
-	_shareButton->setText(QStringLiteral("分享"));
-	_shareButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
-	_shareButton->setStyleSheet(QStringLiteral(
-		"QToolButton#CamShareButton {"
-		"padding: 0 4px;"
-		"min-width: 0px;"
-		"background: #549bed;"
-		"border: none;"
-		"color:#FFFFFF;"
-		"border-radius: 4px;"
-		"}"
-		"QToolButton#CamShareButton:hover {"
-		"background: #dbeafe;"
-		"color: #1558b0;"
-		"}"));
-	right_group->addWidget(_shareButton);
-}
 
 void CloudController::RefreshUserChipFromSession()
 {
@@ -454,10 +406,6 @@ void CloudController::SyncTitleBarWidgets()
 	if (_syncStatusButton) {
 		_syncStatusButton->setFixedHeight(sync_height);
 		_syncStatusButton->adjustSize();
-	}
-	if (_shareButton) {
-		_shareButton->setFixedHeight(sync_height);
-		_shareButton->adjustSize();
 	}
 	if (_userChip) {
 		_userChip->setFixedHeight(height);
@@ -544,7 +492,7 @@ void CloudController::ShowFileManagerWorkspace(const QUrl& page_url)
 			context.filePath = file_path;
 			context.source = qianjizn::cloudserver::OpenRequestSource::Local;
 			context.fromRecent = true;
-			_mainWindow->SetPendingOpenRequest(context);
+			SetPendingOpenRequest(context);
 			const bool opened = _mainWindow->OpenFile(file_path, QString(), false);
 			if (!opened) {
 				return;
@@ -589,7 +537,7 @@ void CloudController::OpenCloudFileInWorkspace(const QString& file_path, const Q
 	context.fileUuid = file_uuid;
 	context.source = qianjizn::cloudserver::OpenRequestSource::Cloud;
 	context.fromRecent = true;
-	_mainWindow->SetPendingOpenRequest(context);
+	SetPendingOpenRequest(context);
 	const bool opened = _mainWindow->OpenFile(file_path, QString(), false);
 	if (!opened) {
 		return;
@@ -675,7 +623,7 @@ void CloudController::HandleUploadTargetSelected(const QVariantMap& payload)
 		? payload.value(QStringLiteral("teamUuid")).toString().trimmed()
 		: QString();
 	const QString scope_label = scope == QStringLiteral("team") ? tr("team") : tr("personal");
-	const qianjizn::cloudserver::CloudFileState document = _mainWindow->CurrentFileState();
+	const qianjizn::cloudserver::CloudFileState document = CurrentFileState();
 
 	if (folder_uuid.isEmpty()) {
 		QMessageBox::warning(_mainWindow, tr("Warning"), tr("Upload target folder is missing."));
@@ -779,6 +727,5 @@ void CloudController::OpenTeam()
 		QDesktopServices::openUrl(url);
 		});
 }
-#endif
 
 QJ_NAMESPACE_ULTRACAM_ULTRAMILL_END
