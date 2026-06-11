@@ -41,6 +41,7 @@ NMainWindow::NMainWindow(QWidget* parent)
 	, _actionSaveAs(nullptr)
 	, _homeWorkspace(nullptr)
 	, _toolLibDialog(nullptr)
+	, _currentFilePath()
 #ifdef ENABLE_CLOUD_SERVER_MODULE
 	, _cloudController(nullptr)
 #endif
@@ -87,13 +88,30 @@ const qianjizn::cloudserver::UserAuthService& NMainWindow::UserAuth() const
 {
 	return _cloudController->UserAuth();
 }
+
+void NMainWindow::SetPendingOpenRequest(const qianjizn::cloudserver::OpenRequestContext& context)
+{
+	if (_cloudController) {
+		_cloudController->SetPendingOpenRequest(context);
+	}
+}
 #endif
 
 void NMainWindow::ApplyWindowPresentation()
 {
-	setWindowTitle(tr("QJCAM DEMO"));
+	UpdateWindowTitle();
 	setWindowIcon(QIcon(QStringLiteral(":/qjcam/resource/logo.ico")));
 	setMinimumSize(600, 400);
+}
+
+void NMainWindow::UpdateWindowTitle()
+{
+	const QString baseTitle = QStringLiteral("QJCAM DEMO 版");
+	if (_currentFilePath.isEmpty()) {
+		setWindowTitle(tr("Untitled") + QStringLiteral(" - ") + baseTitle);
+	} else {
+		setWindowTitle(QFileInfo(_currentFilePath).fileName() + QStringLiteral(" - ") + baseTitle);
+	}
 }
 
 #ifdef ENABLE_CLOUD_SERVER_MODULE
@@ -291,6 +309,9 @@ bool NMainWindow::SaveWorkspaceToPath(const QString& file_path, bool silent)
 		return false;
 	}
 
+	_currentFilePath = absolute_file_path;
+	UpdateWindowTitle();
+
 	if (!silent && statusBar()) {
 		statusBar()->showMessage(tr("Saved file: %1").arg(QFileInfo(absolute_file_path).fileName()), 3000);
 	}
@@ -323,6 +344,47 @@ bool NMainWindow::AddRecentlyOpenedFile(const QString& file_path)
 	qianjizn::project::CAMOptsPtr->SetRecentFileList(files.join(';').toStdString());
 	return true;
 }
+
+bool NMainWindow::IsEmptyDraftWindow() const
+{
+	if (!_homeWorkspace) {
+		return true;
+	}
+
+	const QString viewport_text = _homeWorkspace->ViewportText().trimmed();
+	if (!viewport_text.isEmpty()) {
+		return false;
+	}
+
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+	if (_cloudController) {
+		const qianjizn::cloudserver::CloudFileState& state = _cloudController->CurrentFileState();
+		if (!state.IsDraft()) {
+			return false;
+		}
+	}
+#endif
+
+	return true;
+}
+
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+bool NMainWindow::StartNewProcessForOpenRequest(const qianjizn::cloudserver::OpenRequestContext& context) const
+{
+	const QStringList arguments = context.ToLaunchArguments();
+	QStringList cmd_parts;
+	cmd_parts.append(QStringLiteral("\"%1\"").arg(qApp->applicationFilePath()));
+	for (const QString& arg : arguments) {
+		cmd_parts.append(QStringLiteral("\"%1\"").arg(arg));
+	}
+	const QString open_cmd = cmd_parts.join(QLatin1Char(' '));
+	const bool started = QProcess::startDetached(open_cmd);
+	if (!started) {
+		qWarning() << "[NMainWindow] Failed to start new process for open request, cmd:" << open_cmd;
+	}
+	return started;
+}
+#endif
 
 bool NMainWindow::LoadTextFileIntoWorkspace(const QString& file_path, bool silent)
 {
@@ -359,6 +421,8 @@ bool NMainWindow::LoadTextFileIntoWorkspace(const QString& file_path, bool silen
 
 	_homeWorkspace->SetViewportText(text);
 	_homeWorkspace->SetViewportFilePath(absolute_file_path);
+	_currentFilePath = absolute_file_path;
+	UpdateWindowTitle();
 
 	if (!silent && statusBar()) {
 		statusBar()->showMessage(tr("Opened file: %1").arg(QFileInfo(absolute_file_path).fileName()), 3000);
@@ -422,9 +486,6 @@ void NMainWindow::InitRibbonBar()
 		quick_access_bar->addAction(_actionOpen);
 		quick_access_bar->addAction(_actionSave);
 		quick_access_bar->addAction(_actionSaveAs);
-#ifdef ENABLE_CLOUD_SERVER_MODULE
-		quick_access_bar->addAction(_actionUpload);
-#endif
 	}
 
 	const auto makeAction = [this](const QString& text, QStyle::StandardPixmap icon_type) {
@@ -500,6 +561,34 @@ void NMainWindow::OnShowToolLibDialog()
 
 void NMainWindow::OnOpen()
 {
+	if (!IsEmptyDraftWindow()) {
+		// 当前窗口已有内容，先让用户选择文件，再交给新进程打开
+		const QString target_file = QFileDialog::getOpenFileName(
+			this,
+			tr("Open QJP File"),
+			QString(),
+			tr("QJP Files (*.qjp)"));
+		if (target_file.isEmpty()) {
+			return;
+		}
+
+		const QString absolute_target_file = QFileInfo(target_file).absoluteFilePath();
+#ifdef ENABLE_CLOUD_SERVER_MODULE
+		qianjizn::cloudserver::OpenRequestContext context;
+		context.filePath = absolute_target_file;
+		context.source = qianjizn::cloudserver::OpenRequestSource::Local;
+		if (!StartNewProcessForOpenRequest(context)) {
+			QMessageBox::warning(this, tr("Warning"), tr("Failed to start a new project window."));
+		}
+#else
+		const QString open_cmd = QStringLiteral("\"%1\" -o \"%2\"").arg(qApp->applicationFilePath(), absolute_target_file);
+		if (!QProcess::startDetached(open_cmd)) {
+			QMessageBox::warning(this, tr("Warning"), tr("Failed to start a new project window."));
+		}
+#endif
+		return;
+	}
+
 #ifdef ENABLE_CLOUD_SERVER_MODULE
 	if (_cloudController) {
 		_cloudController->PrepareForLocalOpen();
@@ -557,8 +646,8 @@ void NMainWindow::OnNewProject()
 		_cloudController->HideFileManagerView();
 	}
 #endif
-	const QString program = QCoreApplication::applicationFilePath();
-	const bool started = QProcess::startDetached(program, QStringList{}, QCoreApplication::applicationDirPath());
+	const QString open_cmd = QStringLiteral("\"%1\"").arg(qApp->applicationFilePath());
+	const bool started = QProcess::startDetached(open_cmd);
 	if (statusBar()) {
 		statusBar()->showMessage(
 			started ? tr("Started a new project window.") : tr("Failed to start a new project window."),

@@ -35,6 +35,8 @@ public:
 		const QString& suggested_file_name,
 		OpenCallback callback,
 		QString* error_message = nullptr);
+	bool UpdateFileLastOpened(const QString& file_uuid,
+		const QString& team_uuid = QString());
 	bool SaveCloudFile(const QString& local_file_path,
 		const QString& file_uuid,
 		SaveCallback callback,

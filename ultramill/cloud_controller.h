@@ -68,6 +68,7 @@ private:
 	};
 
 	bool EnsureDesktopWebServerReady(bool show_warning = true);
+	void HandleStartupOpenRequest();
 	void InitUserChip();
 	void InitSyncStatusButton();
 	void RefreshUserChipFromSession();

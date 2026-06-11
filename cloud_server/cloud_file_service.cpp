@@ -220,6 +220,51 @@ bool CloudFileService::OpenCloudFile(const QString& file_uuid,
 	return true;
 }
 
+bool CloudFileService::UpdateFileLastOpened(const QString& file_uuid, const QString& team_uuid)
+{
+	const QString normalized_file_uuid = file_uuid.trimmed();
+	if (normalized_file_uuid.isEmpty()) {
+		return false;
+	}
+
+	const QString token = _authService && _authService->Session()
+		? _authService->Session()->AuthToken().trimmed()
+		: QString();
+	if (token.isEmpty()) {
+		return false;
+	}
+
+	AuthHttpClient* http_client = EnsureHttpClient();
+	if (!http_client) {
+		return false;
+	}
+
+	QJsonObject request_body{
+		{ QStringLiteral("fileUuid"), normalized_file_uuid },
+	};
+
+	const QString normalized_team_uuid = team_uuid.trimmed();
+	const QString api_path = normalized_team_uuid.isEmpty()
+		? QStringLiteral("/api/file/updateLastOpened")
+		: QStringLiteral("/api/file/updateTeamLastOpened");
+
+	if (!normalized_team_uuid.isEmpty()) {
+		request_body.insert(QStringLiteral("teamUuid"), normalized_team_uuid);
+	}
+
+	// Fire-and-forget: 不关心返回，静默失败不影响主流程
+	http_client->PostJson(
+		api_path,
+		token,
+		QJsonDocument(request_body).toJson(QJsonDocument::Compact),
+		10,
+		[](const AuthHttpClient::Response& /*response*/) {
+			// 静默忽略
+		});
+
+	return true;
+}
+
 bool CloudFileService::SaveCloudFile(const QString& local_file_path,
 	const QString& file_uuid,
 	SaveCallback callback,

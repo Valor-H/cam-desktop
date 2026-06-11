@@ -85,15 +85,18 @@ void CloudController::ApplyOpenedFileState(const qianjizn::cloudserver::OpenRequ
 		: QFileInfo(requested_path).absoluteFilePath().trimmed();
 	if (open_context.IsCloud()) {
 		_currentFileState.AssignCloudFile(absolute_file_path, open_context.fileUuid);
+		SetSyncStatusVisual(SyncStatusVisual::Synced);
 		return;
 	}
 
 	if (absolute_file_path.isEmpty()) {
 		_currentFileState.ClearToDraft();
+		SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
 		return;
 	}
 
 	_currentFileState.AssignLocalFile(absolute_file_path);
+	SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
 }
 
 void CloudController::Initialize()
@@ -104,6 +107,25 @@ void CloudController::Initialize()
 	_userAuth.InitFromStoredToken();
 	HideFileManagerView();
 	SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
+	HandleStartupOpenRequest();
+}
+
+void CloudController::HandleStartupOpenRequest()
+{
+	if (!_mainWindow) {
+		return;
+	}
+
+	qianjizn::cloudserver::OpenRequestContext startup_open_request;
+	const bool has_startup_open_request = qianjizn::cloudserver::OpenRequestContext::TryParseLaunchArguments(
+		QCoreApplication::arguments(),
+		&startup_open_request);
+	if (!has_startup_open_request) {
+		return;
+	}
+
+	SetPendingOpenRequest(startup_open_request);
+	_mainWindow->OpenFile(startup_open_request.filePath, QString(), false);
 }
 
 void CloudController::HandleMainWindowEvent(QEvent* event)
@@ -392,8 +414,7 @@ void CloudController::InitSyncStatusButton()
 	});
 	SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
 
-	right_group->addWidget(_syncStatusButton);
-}
+	right_group->insertWidget(right_group->actions().constFirst(), _syncStatusButton);}
 
 
 void CloudController::RefreshUserChipFromSession()
@@ -522,19 +543,45 @@ void CloudController::ShowFileManagerWorkspace(const QUrl& page_url)
 			context.filePath = file_path;
 			context.source = qianjizn::cloudserver::OpenRequestSource::Local;
 			context.fromRecent = true;
-			SetPendingOpenRequest(context);
+
+			if (!_mainWindow->IsEmptyDraftWindow()) {
+				_mainWindow->StartNewProcessForOpenRequest(context);
+				return;
+			}
+
+			_mainWindow->SetPendingOpenRequest(context);
 			const bool opened = _mainWindow->OpenFile(file_path, QString(), false);
 			if (!opened) {
 				return;
 			}
-			SetSyncStatusVisual(SyncStatusVisual::NotUploaded);
 			});
 		connect(_fileManagerView,
 			&qianjizn::cloudserver::FileManagerView::OpenCloudFileRequested,
 			this,
 			[this](const QString& file_path, const QString& file_uuid) {
 				HideFileManagerView();
-				OpenCloudFileInWorkspace(file_path, file_uuid);
+				if (!_mainWindow) {
+					return;
+				}
+
+				qianjizn::cloudserver::OpenRequestContext context;
+				context.filePath = file_path;
+				context.fileUuid = file_uuid;
+				context.source = qianjizn::cloudserver::OpenRequestSource::Cloud;
+				context.fromRecent = true;
+
+				// 打开云端文件后更新最近打开时间（无论新窗口还是当前窗口都更新）
+				if (_cloudFileService) {
+					_cloudFileService->UpdateFileLastOpened(file_uuid);
+				}
+
+				if (!_mainWindow->IsEmptyDraftWindow()) {
+					_mainWindow->StartNewProcessForOpenRequest(context);
+					return;
+				}
+
+				_mainWindow->SetPendingOpenRequest(context);
+				_mainWindow->OpenFile(file_path, QString(), false);
 			});
 		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::OpenRequested, this, &CloudController::OpenRequested);
 		connect(_fileManagerView, &qianjizn::cloudserver::FileManagerView::NewProjectRequested, this, &CloudController::NewProjectRequested);
@@ -567,12 +614,19 @@ void CloudController::OpenCloudFileInWorkspace(const QString& file_path, const Q
 	context.fileUuid = file_uuid;
 	context.source = qianjizn::cloudserver::OpenRequestSource::Cloud;
 	context.fromRecent = true;
-	SetPendingOpenRequest(context);
-	const bool opened = _mainWindow->OpenFile(file_path, QString(), false);
-	if (!opened) {
+
+	// 打开云端文件后更新最近打开时间（无论新窗口还是当前窗口都更新）
+	if (_cloudFileService) {
+		_cloudFileService->UpdateFileLastOpened(file_uuid);
+	}
+
+	if (!_mainWindow->IsEmptyDraftWindow()) {
+		_mainWindow->StartNewProcessForOpenRequest(context);
 		return;
 	}
-	SetSyncStatusVisual(SyncStatusVisual::Synced);
+
+	_mainWindow->SetPendingOpenRequest(context);
+	_mainWindow->OpenFile(file_path, QString(), false);
 }
 
 void CloudController::OpenUploadedCloudFile(const QString& file_uuid, const QString& suggested_file_name)

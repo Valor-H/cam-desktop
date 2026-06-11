@@ -13,9 +13,9 @@ namespace
 {
 	CamOptions g_camOptions;
 
-	constexpr const char* XML_ROOT_LITERAL = "options";
-	constexpr const char* XML_GENERAL_LITERAL = "general";
-	constexpr const char* XML_RECENT_FILE_LIST = "recentFileList";
+	constexpr const char* XML_ROOT_LITERAL = "CAM_OPTION";
+	constexpr const char* XML_GENERAL_LITERAL = "General";
+	constexpr const char* XML_RECENT_FILE_LIST = "RecentFileList";
 	constexpr size_t MAX_RECENT_FILE_COUNT = 9;
 
 	std::filesystem::path GetOptionsFilePath()
@@ -118,17 +118,37 @@ namespace
 		return output.good();
 	}
 
-	bool ExtractElementText(const std::string& xml, const char* parent_name, const char* child_name, std::string& value)
+	bool ExtractNestedElementText(
+		const std::string& xml,
+		const char* root_name,
+		const char* parent_name,
+		const char* child_name,
+		std::string& value)
 	{
+		const std::string root_begin = std::string("<") + root_name + ">";
+		const std::string root_end = std::string("</") + root_name + ">";
+		const size_t root_pos = xml.find(root_begin);
+		if (root_pos == std::string::npos) {
+			return false;
+		}
+
+		const size_t root_close = xml.find(root_end, root_pos + root_begin.size());
+		if (root_close == std::string::npos) {
+			return false;
+		}
+
 		const std::string parent_begin = std::string("<") + parent_name + ">";
 		const std::string parent_end = std::string("</") + parent_name + ">";
-		const size_t parent_pos = xml.find(parent_begin);
+		const size_t parent_pos = xml.find(parent_begin, root_pos + root_begin.size());
 		if (parent_pos == std::string::npos) {
+			return false;
+		}
+		if (parent_pos > root_close) {
 			return false;
 		}
 
 		const size_t parent_close = xml.find(parent_end, parent_pos + parent_begin.size());
-		if (parent_close == std::string::npos) {
+		if (parent_close == std::string::npos || parent_close > root_close) {
 			return false;
 		}
 
@@ -206,7 +226,7 @@ bool CamOptions::Read()
 		return false;
 	}
 
-	ExtractElementText(xml, XML_GENERAL_LITERAL, XML_RECENT_FILE_LIST, _recentFileList);
+	ExtractNestedElementText(xml, XML_ROOT_LITERAL, XML_GENERAL_LITERAL, XML_RECENT_FILE_LIST, _recentFileList);
 	return true;
 }
 

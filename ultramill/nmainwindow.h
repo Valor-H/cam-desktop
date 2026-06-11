@@ -11,6 +11,7 @@ class QWidget;
 
 QJ_NAMESPACE_BEGIN1(cloudserver)
 #ifdef ENABLE_CLOUD_SERVER_MODULE
+class OpenRequestContext;
 class UserAuthService;
 #endif
 QJ_NAMESPACE_END1
@@ -34,7 +35,10 @@ public:
     bool OpenFile(const QString& file_name, const QString& backup_file = "", bool silent = false);
     bool SaveFile(bool silent = false);
 	bool SaveAsFile(const QString& file_path = QString(), bool silent = false);
+	bool IsEmptyDraftWindow() const;
+	bool StartNewProcessForOpenRequest(const qianjizn::cloudserver::OpenRequestContext& context) const;
 #ifdef ENABLE_CLOUD_SERVER_MODULE
+    void SetPendingOpenRequest(const qianjizn::cloudserver::OpenRequestContext& context);
     qianjizn::cloudserver::UserAuthService& UserAuth();
     const qianjizn::cloudserver::UserAuthService& UserAuth() const;
 #endif
@@ -53,6 +57,7 @@ private:
 #endif
     void InitRibbonBar();
     void InitCentralWorkspace();
+    void UpdateWindowTitle();
     void OnShowToolLibDialog();
     void OnOpen();
     void OnSave();
@@ -71,9 +76,10 @@ private:
     QAction* _actionNew;
     QAction* _actionOpen;
     QAction* _actionSave;
-	QAction* _actionSaveAs;
+    QAction* _actionSaveAs;
     HomeWorkspace* _homeWorkspace;
     ToolLibDialog* _toolLibDialog;
+    QString _currentFilePath;
 #ifdef ENABLE_CLOUD_SERVER_MODULE
     CloudController* _cloudController;
 #endif

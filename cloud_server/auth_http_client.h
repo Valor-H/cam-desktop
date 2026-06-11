@@ -53,6 +53,12 @@ public:
 		const QString& target_file_path,
 		int timeout_sec,
 		DownloadCallback callback);
+	/** 发送 JSON POST 请求（fire-and-forget）。 */
+	void PostJson(const QString& path,
+		const QString& bearer_token,
+		const QByteArray& json_body,
+		int timeout_sec,
+		Callback callback);
 	/** 发送 multipart/form-data POST 请求上传文件。 */
 	void PostMultipartFile(const QString& path,
 		const QString& bearer_token,
@@ -65,6 +71,12 @@ public:
 	void CancelAll();
 
 private:
+	/** 发送 JSON POST 请求（内部通用实现）。 */
+	void DoPost(const QString& path,
+		const QString& bearer_token,
+		const QByteArray& body,
+		int timeout_sec,
+		Callback callback);
 	/** 保存服务端基础地址。 */
 	QString                                _baseUrl;
 	/** 维护 Qt 网络请求管理器。 */

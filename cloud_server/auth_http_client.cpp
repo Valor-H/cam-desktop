@@ -29,9 +29,10 @@ AuthHttpClient::~AuthHttpClient()
 	CancelAll();
 }
 
-void AuthHttpClient::Post(
+void AuthHttpClient::DoPost(
 	const QString& path,
 	const QString& bearer_token,
+	const QByteArray& body,
 	int            timeout_sec,
 	Callback       callback)
 {
@@ -45,7 +46,7 @@ void AuthHttpClient::Post(
 	req->headers["Authorization"] = "Bearer " + bearer_token.toStdString();
 	req->headers["Content-Type"] = "application/json";
 	req->headers["X-Client-Type"] = "desktop";
-	req->body = "{}";
+	req->body = body.toStdString();
 
 	requests::async(req,
 		[epoch_ref, my_epoch, cb = std::move(callback)](const HttpResponsePtr& resp) {
@@ -66,8 +67,8 @@ void AuthHttpClient::Post(
 					result.networkOk = true;
 					result.httpStatus = resp->status_code;
 
-					const QByteArray body = QByteArray::fromStdString(resp->body);
-					const QJsonDocument document = QJsonDocument::fromJson(body);
+					const QByteArray resp_body = QByteArray::fromStdString(resp->body);
+					const QJsonDocument document = QJsonDocument::fromJson(resp_body);
 					if (document.isObject()) {
 						const QJsonObject root = document.object();
 						result.bizCode = root.value(QStringLiteral("code")).toInt(-1);
@@ -86,6 +87,25 @@ void AuthHttpClient::Post(
 				},
 				Qt::QueuedConnection);
 		});
+}
+
+void AuthHttpClient::Post(
+	const QString& path,
+	const QString& bearer_token,
+	int            timeout_sec,
+	Callback       callback)
+{
+	DoPost(path, bearer_token, QByteArrayLiteral("{}"), timeout_sec, std::move(callback));
+}
+
+void AuthHttpClient::PostJson(
+	const QString& path,
+	const QString& bearer_token,
+	const QByteArray& json_body,
+	int            timeout_sec,
+	Callback       callback)
+{
+	DoPost(path, bearer_token, json_body, timeout_sec, std::move(callback));
 }
 
 void AuthHttpClient::PostJsonToFile(

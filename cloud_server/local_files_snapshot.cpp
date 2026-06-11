@@ -15,6 +15,7 @@ namespace LocalFilesSnapshot
 	namespace
 	{
 		constexpr int s_qjpFileType = 11;
+		constexpr int s_maxRecentFilesForWeb = 9;	// 最多显示 9 个本地最近文件
 
 		QString ToNativePath(const QString& path)
 		{
@@ -47,17 +48,22 @@ namespace LocalFilesSnapshot
 				file = NormalizePath(file);
 			}
 			files.removeAll(QString());
+			while (files.size() > s_maxRecentFilesForWeb) {
+				files.removeLast();
+			}
 			return files;
 		}
 
 		QJsonObject ToFileInfoObject(const QFileInfo& info)
 		{
+			const QString lastModified = info.lastModified().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss"));
 			return QJsonObject{
 				{ QStringLiteral("children"), QJsonArray {} },
 				{ QStringLiteral("fileName"), info.fileName() },
 				{ QStringLiteral("fileType"), s_qjpFileType },
 				{ QStringLiteral("fileUuid"), QStringLiteral("local::") + ToNativeFilePath(info) },
-				{ QStringLiteral("lastModified"), info.lastModified().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")) },
+				{ QStringLiteral("lastModified"), lastModified },
+				{ QStringLiteral("lastOpened"), lastModified },
 				{ QStringLiteral("link"), QJsonValue::Null },
 				{ QStringLiteral("localPath"), ToNativeFilePath(info) },
 				{ QStringLiteral("owner"), QJsonValue::Null },
