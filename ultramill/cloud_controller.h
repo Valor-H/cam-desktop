@@ -84,6 +84,7 @@ private:
 	void Logout();
 	void OpenPersonalProfile();
 	void OpenTeam();
+	void OpenTrialApplication();
 
 	NMainWindow* _mainWindow;
 	qianjizn::cloudserver::UserAuthService _userAuth;
@@ -92,6 +93,7 @@ private:
 	qianjizn::cloudserver::FileManagerView* _fileManagerView;
 	qianjizn::cloudserver::UploadPickerDialog* _uploadTargetPickerDialog;
 	QToolButton* _syncStatusButton;
+	QToolButton* _trialButton;
 	qianjizn::cloudserver::TitleBarUserChip* _userChip;
 	QMenu* _loginMenu;
 	QAction* _personalCenterAction;

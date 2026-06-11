@@ -51,6 +51,7 @@ CloudController::CloudController(NMainWindow* main_window)
 	, _fileManagerView(nullptr)
 	, _uploadTargetPickerDialog(nullptr)
 	, _syncStatusButton(nullptr)
+	, _trialButton(nullptr)
 	, _userChip(nullptr)
 	, _loginMenu(nullptr)
 	, _personalCenterAction(nullptr)
@@ -293,6 +294,31 @@ void CloudController::InitUserChip()
 	bar->addWidget(spacer_widget);
 
 	InitSyncStatusButton();
+
+	_trialButton = new QToolButton(bar);
+	_trialButton->setObjectName(QStringLiteral("CamTitleBarTrialButton"));
+	_trialButton->setText(QStringLiteral("申请试用"));
+	_trialButton->setAutoRaise(true);
+	_trialButton->setFocusPolicy(Qt::NoFocus);
+	_trialButton->setCursor(Qt::PointingHandCursor);
+	_trialButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+	_trialButton->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Fixed);
+	_trialButton->setStyleSheet(QStringLiteral(
+		"QToolButton#CamTitleBarTrialButton {"
+		"padding: 0 8px;"
+		"min-width: 0px;"
+		"background: transparent;"
+		"border: none;"
+		"border-radius: 4px;"
+		"color: #000000;"
+		"}"
+		"QToolButton#CamTitleBarTrialButton:hover {"
+		"background: #dbeafe;"
+		"color: #0d3d7a;"
+		"}"));
+	bar->addWidget(_trialButton);
+	connect(_trialButton, &QToolButton::clicked, this, &CloudController::OpenTrialApplication);
+
 	_userChip = new qianjizn::cloudserver::TitleBarUserChip(bar, _userAuth.ApiBaseUrl());
 	bar->addWidget(_userChip);
 
@@ -406,6 +432,10 @@ void CloudController::SyncTitleBarWidgets()
 	if (_syncStatusButton) {
 		_syncStatusButton->setFixedHeight(sync_height);
 		_syncStatusButton->adjustSize();
+	}
+	if (_trialButton) {
+		_trialButton->setFixedHeight(height);
+		_trialButton->adjustSize();
 	}
 	if (_userChip) {
 		_userChip->setFixedHeight(height);
@@ -722,6 +752,28 @@ void CloudController::OpenTeam()
 		if (!error_message.isEmpty() || !url.isValid()) {
 			QMessageBox::warning(
 				_mainWindow, tr("Warning"), error_message.isEmpty() ? tr("Failed to open team page.") : error_message);
+			return;
+		}
+		QDesktopServices::openUrl(url);
+		});
+}
+
+void CloudController::OpenTrialApplication()
+{
+	if (!_mainWindow) {
+		return;
+	}
+
+	const bool authenticated = _userAuth.Session() && _userAuth.Session()->IsAuthenticated();
+	if (!authenticated) {
+		QMessageBox::information(_mainWindow, tr("Hint"), tr("Please login first."));
+		return;
+	}
+
+	_userAuth.BuildExternalWebSsoUrl(QStringLiteral("/apply-trial"), [this](const QUrl& url, const QString& error_message) {
+		if (!error_message.isEmpty() || !url.isValid()) {
+			QMessageBox::warning(
+				_mainWindow, tr("Warning"), error_message.isEmpty() ? tr("Failed to open trial application page.") : error_message);
 			return;
 		}
 		QDesktopServices::openUrl(url);
