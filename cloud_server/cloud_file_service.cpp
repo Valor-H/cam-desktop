@@ -1,38 +1,19 @@
 #include "cloud_file_service.h"
 
-#include "auth_http_client.h"
-#include "user_auth_service.h"
+#include "file_api_service.h"
 
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QStandardPaths>
-#include <QUrl>
-#include <QVariantMap>
-
-#include <utility>
 
 namespace
 {
-	constexpr int s_recentFileDownloadTimeoutSec = 60;
-
-	QString ApiBaseStringForClient(const QUrl& url)
-	{
-		QString base_url = url.toString(QUrl::RemoveQuery | QUrl::RemoveFragment);
-		while (base_url.endsWith(QLatin1Char('/'))) {
-			base_url.chop(1);
-		}
-		return base_url;
-	}
-
 	QString SanitizeFileSegment(QString value)
 	{
 		if (value.isEmpty()) {
 			return QStringLiteral("recent-file");
 		}
-
 		return value;
 	}
 
@@ -42,7 +23,6 @@ namespace
 		if (base_dir.trimmed().isEmpty()) {
 			base_dir = QDir::tempPath();
 		}
-
 		return QDir(base_dir).filePath(QStringLiteral("QIANJIZN/QJCAM/cache-path"));
 	}
 }
@@ -51,8 +31,7 @@ QJ_NAMESPACE_FIT_CLOUD_SERVER_BEGIN
 
 CloudFileService::CloudFileService(UserAuthService* auth_service, QObject* parent)
 	: QObject(parent)
-	, _authService(auth_service)
-	, _httpClient(nullptr)
+	, _apiService(new FileApiService(auth_service, this))
 	, _saveInFlight(false)
 {
 }
@@ -77,14 +56,6 @@ bool CloudFileService::UploadFileToTarget(const QString& local_file_path,
 		return false;
 	}
 
-	const QString normalized_folder_uuid = folder_uuid.trimmed();
-	if (normalized_folder_uuid.isEmpty()) {
-		if (error_message) {
-			*error_message = QStringLiteral("Upload target folder is missing.");
-		}
-		return false;
-	}
-
 	const QString normalized_local_file_path = local_file_path.trimmed();
 	const QFileInfo source_file(normalized_local_file_path);
 	if (!source_file.exists() || !source_file.isFile()) {
@@ -94,52 +65,24 @@ bool CloudFileService::UploadFileToTarget(const QString& local_file_path,
 		return false;
 	}
 
-	const QString token = _authService && _authService->Session()
-		? _authService->Session()->AuthToken().trimmed()
-		: QString();
-	if (token.isEmpty()) {
-		if (error_message) {
-			*error_message = QStringLiteral("Current session is missing token.");
-		}
-		return false;
-	}
-
-	AuthHttpClient* http_client = EnsureHttpClient();
-	if (!http_client) {
-		if (error_message) {
-			*error_message = QStringLiteral("Cloud upload client initialization failed.");
-		}
-		return false;
-	}
-
 	_saveInFlight = true;
 
-	QVariantMap form_fields{
-		{ QStringLiteral("parentUuid"), normalized_folder_uuid },
-	};
-
-	const QString normalized_team_uuid = team_uuid.trimmed();
-	QString api_path = QStringLiteral("/api/file/addFile");
-	if (!normalized_team_uuid.isEmpty()) {
-		form_fields.insert(QStringLiteral("teamUuid"), normalized_team_uuid);
-		api_path = QStringLiteral("/api/file/addTeamFile");
-	}
-
-	http_client->PostMultipartFile(
-		api_path,
-		token,
-		QStringLiteral("files"),
+	const bool started = _apiService->UploadFile(
 		normalized_local_file_path,
-		form_fields,
-		60,
-		[this, cb = std::move(callback)](const AuthHttpClient::Response& response) mutable {
+		folder_uuid,
+		team_uuid,
+		[this, cb = std::move(callback)](const ApiResponse& response) {
 			_saveInFlight = false;
 			if (cb) {
 				cb(response);
 			}
-		});
+		},
+		error_message);
 
-	return true;
+	if (!started) {
+		_saveInFlight = false;
+	}
+	return started;
 }
 
 bool CloudFileService::OpenCloudFile(const QString& file_uuid,
@@ -155,16 +98,6 @@ bool CloudFileService::OpenCloudFile(const QString& file_uuid,
 		return false;
 	}
 
-	const QString token = _authService && _authService->Session()
-		? _authService->Session()->AuthToken().trimmed()
-		: QString();
-	if (token.isEmpty()) {
-		if (error_message) {
-			*error_message = QStringLiteral("Current session is missing token.");
-		}
-		return false;
-	}
-
 	const QString cache_file_path = BuildCacheFilePath(normalized_file_uuid, suggested_file_name);
 	const QFileInfo cache_info(cache_file_path);
 	QDir cache_dir(cache_info.dir());
@@ -175,94 +108,27 @@ bool CloudFileService::OpenCloudFile(const QString& file_uuid,
 		return false;
 	}
 
-	AuthHttpClient* http_client = EnsureHttpClient();
-	if (!http_client) {
-		if (error_message) {
-			*error_message = QStringLiteral("Desktop download client initialization failed.");
-		}
-		return false;
-	}
-
-	QJsonObject request_body{
-		{ QStringLiteral("fileUuid"), normalized_file_uuid },
-	};
-
-	http_client->PostJsonToFile(
-		QStringLiteral("/api/file/getFile"),
-		token,
-		QJsonDocument(request_body).toJson(QJsonDocument::Compact),
+	return _apiService->DownloadFile(
+		normalized_file_uuid,
+		suggested_file_name,
 		cache_file_path,
-		s_recentFileDownloadTimeoutSec,
-		[this, normalized_file_uuid, cb = std::move(callback)](const AuthHttpClient::DownloadResponse& response) mutable {
-			if (!response.networkOk) {
-				QFile::remove(response.targetFilePath);
-				if (cb) {
-					cb(QString(), normalized_file_uuid, QStringLiteral("Cloud file download failed: %1").arg(response.errorMessage));
-				}
+		[normalized_file_uuid, cb = std::move(callback)](const ApiDownloadResponse& response) {
+			if (!cb) {
 				return;
 			}
-
-			if (!response.writeOk) {
-				QFile::remove(response.targetFilePath);
-				if (cb) {
-					cb(QString(),
-						normalized_file_uuid,
-						QStringLiteral("Cloud file cache write failed: %1").arg(response.errorMessage));
-				}
+			if (!response.success) {
+				QFile::remove(response.localFilePath);
+				cb(QString(), normalized_file_uuid, response.errorMessage);
 				return;
 			}
-
-			if (cb) {
-				cb(response.targetFilePath, normalized_file_uuid, QString());
-			}
-		});
-
-	return true;
+			cb(response.localFilePath, normalized_file_uuid, QString());
+		},
+		error_message);
 }
 
 bool CloudFileService::UpdateFileLastOpened(const QString& file_uuid, const QString& team_uuid)
 {
-	const QString normalized_file_uuid = file_uuid.trimmed();
-	if (normalized_file_uuid.isEmpty()) {
-		return false;
-	}
-
-	const QString token = _authService && _authService->Session()
-		? _authService->Session()->AuthToken().trimmed()
-		: QString();
-	if (token.isEmpty()) {
-		return false;
-	}
-
-	AuthHttpClient* http_client = EnsureHttpClient();
-	if (!http_client) {
-		return false;
-	}
-
-	QJsonObject request_body{
-		{ QStringLiteral("fileUuid"), normalized_file_uuid },
-	};
-
-	const QString normalized_team_uuid = team_uuid.trimmed();
-	const QString api_path = normalized_team_uuid.isEmpty()
-		? QStringLiteral("/api/file/updateLastOpened")
-		: QStringLiteral("/api/file/updateTeamLastOpened");
-
-	if (!normalized_team_uuid.isEmpty()) {
-		request_body.insert(QStringLiteral("teamUuid"), normalized_team_uuid);
-	}
-
-	// Fire-and-forget: 不关心返回，静默失败不影响主流程
-	http_client->PostJson(
-		api_path,
-		token,
-		QJsonDocument(request_body).toJson(QJsonDocument::Compact),
-		10,
-		[](const AuthHttpClient::Response& /*response*/) {
-			// 静默忽略
-		});
-
-	return true;
+	return _apiService->UpdateLastOpened(file_uuid, team_uuid);
 }
 
 bool CloudFileService::SaveCloudFile(const QString& local_file_path,
@@ -294,61 +160,23 @@ bool CloudFileService::SaveCloudFile(const QString& local_file_path,
 		return false;
 	}
 
-	const QString token = _authService && _authService->Session()
-		? _authService->Session()->AuthToken().trimmed()
-		: QString();
-	if (token.isEmpty()) {
-		if (error_message) {
-			*error_message = QStringLiteral("Current session is missing token.");
-		}
-		return false;
-	}
-
-	AuthHttpClient* http_client = EnsureHttpClient();
-	if (!http_client) {
-		if (error_message) {
-			*error_message = QStringLiteral("Cloud save client initialization failed.");
-		}
-		return false;
-	}
-
 	_saveInFlight = true;
 
-	const QVariantMap form_fields{
-		{ QStringLiteral("fileUuid"), normalized_file_uuid },
-		{ QStringLiteral("fileVersion"), QStringLiteral("666") },
-		{ QStringLiteral("override"), QStringLiteral("true") },
-	};
-
-	http_client->PostMultipartFile(
-		QStringLiteral("/api/file/updateFile"),
-		token,
-		QStringLiteral("file"),
+	const bool started = _apiService->SaveFile(
 		normalized_local_file_path,
-		form_fields,
-		60,
-		[this, cb = std::move(callback)](const AuthHttpClient::Response& response) mutable {
+		normalized_file_uuid,
+		[this, cb = std::move(callback)](const ApiResponse& response) {
 			_saveInFlight = false;
 			if (cb) {
 				cb(response);
 			}
-		});
+		},
+		error_message);
 
-	return true;
-}
-
-AuthHttpClient* CloudFileService::EnsureHttpClient()
-{
-	if (_httpClient) {
-		return _httpClient;
+	if (!started) {
+		_saveInFlight = false;
 	}
-
-	if (!_authService) {
-		return nullptr;
-	}
-
-	_httpClient = new AuthHttpClient(ApiBaseStringForClient(_authService->ApiBaseUrl()), this);
-	return _httpClient;
+	return started;
 }
 
 QString CloudFileService::BuildCacheFilePath(const QString& file_uuid, const QString& suggested_file_name) const
@@ -360,7 +188,6 @@ QString CloudFileService::BuildCacheFilePath(const QString& file_uuid, const QSt
 			candidate += QStringLiteral(".qjp");
 		}
 	}
-
 	return QDir::fromNativeSeparators(CloudCacheDirectoryPath()) + QLatin1Char('/') + candidate;
 }
 

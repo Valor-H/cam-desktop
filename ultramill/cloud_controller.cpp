@@ -1,6 +1,7 @@
 #include "cloud_controller.h"
 
 #include "nmainwindow.h"
+#include <cloud_server/api_response.h>
 #include <cloud_server/cloud_file_state.h>
 #include <cloud_server/desktop_web.h>
 #include <cloud_server/desktop_web_server.h>
@@ -29,13 +30,12 @@ using qianjizn::cloudserver::UserSession;
 
 namespace
 {
-	QVariantMap FirstUploadedFile(const AuthHttpClient::Response& response)
+	QVariantMap FirstUploadedFile(const qianjizn::cloudserver::ApiResponse& response)
 	{
 		const QVariantList uploaded_files = response.dataValue.toList();
 		if (!uploaded_files.isEmpty()) {
 			return uploaded_files.constFirst().toMap();
 		}
-
 		return response.data;
 	}
 }
@@ -192,22 +192,13 @@ void CloudController::SaveCloudFileIfNeeded()
 	const bool started = _cloudFileService->SaveCloudFile(
 		document.LocalFilePath(),
 		document.cloudFileUuid,
-		[this](const AuthHttpClient::Response& response) {
+		[this](const qianjizn::cloudserver::ApiResponse& response) {
 			if (!_mainWindow) {
 				return;
 			}
 
-			if (!response.networkOk) {
-				QMessageBox::warning(_mainWindow,
-					tr("Warning"),
-					response.bizMsg.isEmpty() ? tr("Cloud file upload failed.") : response.bizMsg);
-				return;
-			}
-
-			if (response.httpStatus < 200 || response.httpStatus >= 300 || response.bizCode != 200) {
-				QMessageBox::warning(_mainWindow,
-					tr("Warning"),
-					response.bizMsg.isEmpty() ? tr("Cloud file update was rejected.") : response.bizMsg);
+			if (!response.success) {
+				QMessageBox::warning(_mainWindow, tr("Warning"), response.errorMessage);
 				return;
 			}
 
@@ -719,22 +710,13 @@ void CloudController::HandleUploadTargetSelected(const QVariantMap& payload)
 		document.LocalFilePath(),
 		folder_uuid,
 		team_uuid,
-		[this, folder_name, scope_label](const AuthHttpClient::Response& response) {
+		[this, folder_name, scope_label](const qianjizn::cloudserver::ApiResponse& response) {
 			if (!_mainWindow) {
 				return;
 			}
 
-			if (!response.networkOk) {
-				QMessageBox::warning(_mainWindow,
-					tr("Warning"),
-					response.bizMsg.isEmpty() ? tr("Cloud file upload failed.") : response.bizMsg);
-				return;
-			}
-
-			if (response.httpStatus < 200 || response.httpStatus >= 300 || response.bizCode != 200) {
-				QMessageBox::warning(_mainWindow,
-					tr("Warning"),
-					response.bizMsg.isEmpty() ? tr("Cloud file upload was rejected.") : response.bizMsg);
+			if (!response.success) {
+				QMessageBox::warning(_mainWindow, tr("Warning"), response.errorMessage);
 				return;
 			}
 
